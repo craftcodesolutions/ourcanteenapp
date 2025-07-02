@@ -1,0 +1,36 @@
+{
+    "_id": "60f6cbb2a2e7a5c3d4e9a99a",
+    "name": "Spicy Garden",
+    "cuisine": [
+        {
+            "_id": "60f6cbb2a2e7a5c3d329a99a",
+            "name": "Biriyani"
+        },
+        {
+            "_id": "60f6cbb2a2e7a5c3d329a99b",
+            "name": "Rice"
+        },
+        {
+            "_id": "60f6cbb2a2e7a5c3d329a99c",
+            "name": "Snacks"
+        }
+    ],
+    "location": "Rajshahi",
+    "institute": {
+        "_id": "60a6cbb2a2e7a5c3d329a99b",
+        "name": "University of Rajshahi (RU)"
+    },
+    "openingHours": {
+        "monday": "11:00-22:00",
+        "tuesday": "11:00-22:00",
+        "wednesday": "11:00-22:00",
+        "thursday": "11:00-22:00",
+        "friday": "11:00-23:00",
+        "saturday": "12:00-23:00",
+        "sunday": "Closed"
+    },
+    "rating": 4.5,
+    "reviewCount": 128,
+    "banner": "https://i.postimg.cc/gkGZDnLq/screenshot-64.png",
+    "logo": "https://i.postimg.cc/4xVRxNwq/screenshot-65.png"
+}

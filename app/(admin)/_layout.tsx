@@ -131,27 +131,22 @@ export default function TabLayout() {
           height: 56,
         },
       }}>
+      
       <Tabs.Screen
-        name="index"
+        name="restaurant"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <FontAwesome name="home" size={20} color={color} />,
+          title: 'Canteen',
+          tabBarIcon: ({ color }) => <MaterialIcons name="restaurant" size={18} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="config"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <FontAwesome name="search" size={20} color={color} />,
+          title: 'Config',
+          tabBarIcon: ({ color }) => <FontAwesome name="cogs" size={18} color={color} />,
         }}
       />
-      <Tabs.Screen
-        name="explore-copy"
-        options={{
-          title: 'Hudai',
-          tabBarIcon: ({ color }) => <MaterialIcons name="explore" size={20} color={color} />,
-        }}
-      />
+      
     </Tabs>
   );
 }
