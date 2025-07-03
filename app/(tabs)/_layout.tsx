@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router';
 import React, { useState } from 'react';
 import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HapticTab } from '@/components/HapticTab';
 import { FontAwesome, MaterialIcons } from '@expo/vector-icons';
@@ -20,10 +21,11 @@ type Layout = { x: number; width: number };
 function CustomTabBar({ state, descriptors, navigation, position }: CustomTabBarProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const insets = useSafeAreaInsets();
 
   // Theme colors
   const tabBarBg = isDark ? '#18181b' : '#fff';
-  const borderColor = isDark ? '#27272a' : '#eee';
+  // const borderColor = isDark ? '#27272a' : '#eee';
   const indicatorColor = isDark ? '#f43f5e' : 'red';
   const textActive = isDark ? '#f43f5e' : 'red';
   const textInactive = isDark ? '#a1a1aa' : '#888';
@@ -49,8 +51,21 @@ function CustomTabBar({ state, descriptors, navigation, position }: CustomTabBar
   }));
 
   return (
-    <View style={[styles.tabBarContainer, { backgroundColor: tabBarBg }]}>
-      <View style={[styles.tabBar, { backgroundColor: tabBarBg, borderTopColor: borderColor }]}>
+    <SafeAreaView edges={["bottom"]} style={[styles.tabBarContainer, { backgroundColor: tabBarBg }]}>
+      <View style={[styles.tabBar, {
+        backgroundColor: tabBarBg,
+        borderTopColor: 'transparent',
+        position: 'absolute',
+        left: 16,
+        right: 16,
+        bottom: insets.bottom + 2,
+        borderRadius: 24,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.12,
+        shadowRadius: 12,
+        elevation: 10,
+      }]}>
         <Animated.View style={[styles.indicator, { backgroundColor: indicatorColor, shadowColor: indicatorColor }, indicatorStyle]} />
         {state.routes.map((route: any, index: number) => {
           const { options } = descriptors[route.key];
@@ -58,8 +73,8 @@ function CustomTabBar({ state, descriptors, navigation, position }: CustomTabBar
             options.tabBarLabel !== undefined
               ? options.tabBarLabel
               : options.title !== undefined
-              ? options.title
-              : route.name;
+                ? options.title
+                : route.name;
           const isFocused = state.index === index;
           const onPress = () => {
             const event = navigation.emit({
@@ -108,7 +123,7 @@ function CustomTabBar({ state, descriptors, navigation, position }: CustomTabBar
           );
         })}
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -139,17 +154,24 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="cart"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <FontAwesome name="search" size={20} color={color} />,
+          title: 'Cart',
+          tabBarIcon: ({ color }) => <FontAwesome name="shopping-cart" size={20} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="explore-copy"
+        name="orders"
         options={{
-          title: 'Hudai',
-          tabBarIcon: ({ color }) => <MaterialIcons name="explore" size={20} color={color} />,
+          title: 'Orders',
+          tabBarIcon: ({ color }) => <MaterialIcons name="receipt" size={20} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="account"
+        options={{
+          title: 'Account',
+          tabBarIcon: ({ color }) => <MaterialIcons name="account-circle" size={20} color={color} />,
         }}
       />
     </Tabs>
@@ -159,7 +181,12 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   tabBarContainer: {
     width: '100%',
-    backgroundColor: '#fff',
+    backgroundColor: 'transparent',
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    pointerEvents: 'box-none',
   },
   tabBar: {
     flexDirection: 'row',
@@ -167,9 +194,6 @@ const styles = StyleSheet.create({
     height: 56,
     alignItems: 'center',
     justifyContent: 'space-around',
-    position: 'relative',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
   },
   tabItem: {
     flex: 1,

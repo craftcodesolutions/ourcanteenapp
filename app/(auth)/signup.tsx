@@ -1,8 +1,9 @@
 import { useAuth } from '@/context/AuthContext';
+import { useColorScheme } from '@/hooks/useColorScheme';
 import { Picker } from '@react-native-picker/picker';
 import axios from 'axios';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,13 +18,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
-import { useColorScheme } from '@/hooks/useColorScheme';
 
-const institutions = [
-  { id: "111", name: "University of Dhaka(DU)" },
-  { id: "112", name: "University of Rajshahi(RU)" },
-  { id: "113", name: "Rangpur Medical College(RpMC)" },
-];
+// Institutions will be fetched from config API
 
 export default function SignupScreen() {
   const colorScheme = useColorScheme();
@@ -31,6 +27,10 @@ export default function SignupScreen() {
   const { setAuth } = useAuth();
 
   const [loading, setLoading] = useState(false);
+
+  // Dynamic institutions state
+  const [institutions, setInstitutions] = useState<{ _id: string; name: string }[]>([]);
+  const [institutionsLoading, setInstitutionsLoading] = useState(true);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -170,6 +170,17 @@ export default function SignupScreen() {
 
   const colors = Colors[colorScheme ?? 'light'];
 
+  // Fetch institutions from config API on mount
+  useEffect(() => {
+    setInstitutionsLoading(true);
+    axios.get('https://ourcanteennbackend.vercel.app/api/owner/config')
+      .then(res => {
+        setInstitutions(res.data.institutes || []);
+      })
+      .catch(() => setInstitutions([]))
+      .finally(() => setInstitutionsLoading(false));
+  }, []);
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       <KeyboardAvoidingView
@@ -268,14 +279,15 @@ export default function SignupScreen() {
                   onValueChange={(value) => updateFormData('institute', value)}
                   style={[styles.picker, { color: colors.text }]}
                   dropdownIconColor={colors.text}
+                  enabled={!institutionsLoading}
                 >
-                  <Picker.Item label="Select your institution" value="" style={{ fontSize: 14 }} />
+                  <Picker.Item label={institutionsLoading ? "Loading institutions..." : "Select your institution"} value="" style={{ fontSize: 14 }} />
                   {institutions.map((institution) => (
                     <Picker.Item
                       style={{ fontSize: 14 }}
-                      key={institution.id}
+                      key={institution._id}
                       label={institution.name}
-                      value={institution.id}
+                      value={institution._id}
                     />
                   ))}
                 </Picker>

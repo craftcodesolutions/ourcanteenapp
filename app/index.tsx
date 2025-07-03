@@ -20,7 +20,7 @@ const Page = () => {
   if (user && token) {
 
     if (user.isOwner) {
-      return <Redirect href="/(admin)/restaurant" />;
+      return <Redirect href="/(admin)/restaurants" />;
     }
 
     return <Redirect href="/(tabs)" />;

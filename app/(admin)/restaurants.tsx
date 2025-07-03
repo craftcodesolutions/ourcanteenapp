@@ -412,7 +412,7 @@ export default function RestaurantScreen() {
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: cardBg }]}>
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 48, flexGrow: 1 }}>
         {loading ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 80 }}>
             <ActivityIndicator size="large" color={primary} />
