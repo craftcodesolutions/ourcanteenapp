@@ -137,7 +137,7 @@ const OrdersPage = () => {
             />
             <View style={[styles.orderFooter, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}> 
               <Text style={[styles.total, { color: nameColor }]}>Total: ৳{order.total.toFixed(2)}</Text>
-              {order.status === 'PENDING' && (
+              {order.status !== 'SUCCESS' && (
                 <TouchableOpacity
                   style={{ marginLeft: 12, flexDirection: 'row', alignItems: 'center' }}
                   onPress={() => {
