@@ -28,6 +28,7 @@ export default function RootLayout() {
           <Stack.Screen name="restaurant/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="confirmorder" options={{ headerShown: false }} />
           <Stack.Screen name="qr" options={{ headerShown: false }} />
+          <Stack.Screen name="qrasync" options={{ headerShown: false }} />
           <Stack.Screen name="+not-found" />
         </Stack>
         <StatusBar style="auto" />

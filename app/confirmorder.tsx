@@ -177,7 +177,7 @@ export default function ConfirmOrderPage() {
 
                                     setModalVisible(false);
                                     router.push({
-                                        pathname: "/qr",
+                                        pathname: "/qrasync",
                                         params: { data: encodedData },
                                     });
                                 }}

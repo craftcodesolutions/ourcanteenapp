@@ -78,7 +78,7 @@ const OrdersPage = () => {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.center, { backgroundColor: cardBg }]}> 
+      <SafeAreaView style={[styles.center, { backgroundColor: cardBg }]}>
         <ActivityIndicator size="large" color={statusColor} />
         <Text style={{ color: textColor, marginTop: 12 }}>Loading your orders...</Text>
       </SafeAreaView>
@@ -87,7 +87,7 @@ const OrdersPage = () => {
 
   if (error) {
     return (
-      <SafeAreaView style={[styles.center, { backgroundColor: cardBg }]}> 
+      <SafeAreaView style={[styles.center, { backgroundColor: cardBg }]}>
         <MaterialIcons name="error-outline" size={48} color={statusColor} style={{ marginBottom: 16 }} />
         <Text style={{ color: textColor, fontSize: 16, textAlign: 'center' }}>{error}</Text>
       </SafeAreaView>
@@ -96,7 +96,7 @@ const OrdersPage = () => {
 
   if (!orders.length) {
     return (
-      <SafeAreaView style={[styles.center, { backgroundColor: cardBg }]}> 
+      <SafeAreaView style={[styles.center, { backgroundColor: cardBg }]}>
         <MaterialIcons name="receipt" size={64} color={emptyIconColor} style={{ marginBottom: 16 }} />
         <Text style={[styles.emptyText, { color: emptyTextColor }]}>You have no orders yet.</Text>
       </SafeAreaView>
@@ -104,7 +104,7 @@ const OrdersPage = () => {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: cardBg }]}> 
+    <SafeAreaView style={[styles.container, { backgroundColor: cardBg }]}>
       <View style={styles.headerWrapper}>
         <Text style={[styles.pageTitle, { color: textColor }]}>My Orders</Text>
       </View>
@@ -114,7 +114,7 @@ const OrdersPage = () => {
         keyExtractor={(order) => order._id}
         contentContainerStyle={{ paddingTop: 8, paddingBottom: 48 }}
         renderItem={({ item: order }) => (
-          <View style={[styles.orderContainer, { backgroundColor: itemBg, shadowColor: itemShadow }]}> 
+          <View style={[styles.orderContainer, { backgroundColor: itemBg, shadowColor: itemShadow }]}>
             <View style={styles.orderHeader}>
               <Text style={[styles.orderId, { color: priceColor }]}>Order ID: {order._id.slice(-9).toUpperCase()}</Text>
               <Text style={[styles.status, { color: statusColor }]}>{order.status}</Text>
@@ -135,7 +135,7 @@ const OrdersPage = () => {
                 </View>
               )}
             />
-            <View style={[styles.orderFooter, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}> 
+            <View style={[styles.orderFooter, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
               <Text style={[styles.total, { color: nameColor }]}>Total: ৳{order.total.toFixed(2)}</Text>
               {order.status !== 'SUCCESS' && (
                 <TouchableOpacity
