@@ -4,7 +4,7 @@
     "slug": "OurCanteen",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/ourcanteenicon.png",
+    "icon": "./assets/images/smallogo.png",
     "scheme": "ourcanteen",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -13,7 +13,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/ourcanteenicon.png",
+        "foregroundImage": "./assets/images/smallogo.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,

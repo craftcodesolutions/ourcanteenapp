@@ -246,17 +246,17 @@ export default function HomeScreen() {
         >
           <TouchableOpacity
             activeOpacity={1}
-            style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, alignItems: 'center' }}
+            style={[styles.modalContent, { backgroundColor: cardBg }]}
             onPress={e => e.stopPropagation()}
           >
             {selectedItem && (
               <>
                 <Image source={selectedItem.image ? { uri: selectedItem.image } : require('@/assets/images/partial-react-logo.png')} style={{ width: '100%', aspectRatio: 1, borderTopLeftRadius: 20, borderTopRightRadius: 20, backgroundColor: '#eee' }} contentFit="cover" />
                 <View style={{ width: '100%', alignItems: 'flex-start', marginTop: 16 }}>
-                  <ThemedText type="title" style={{ fontSize: 22, fontWeight: '700', marginBottom: 6, textAlign: 'left' }}>{selectedItem.name}</ThemedText>
-                  <ThemedText style={{ fontSize: 15, marginBottom: 10, textAlign: 'left' }}>{selectedItem.description}</ThemedText>
-                  <ThemedText style={{ fontSize: 14, color: '#888', marginBottom: 2, textAlign: 'left' }}>Restaurant: {selectedItem.restaurantName}</ThemedText>
-                  <ThemedText style={{ fontSize: 14, color: '#888', marginBottom: 10, textAlign: 'left' }}>Cuisine: {selectedItem.cuisine?.name ? selectedItem.cuisine.name : ''}</ThemedText>
+                  <ThemedText type="title" style={{ fontSize: 22, fontWeight: '700', marginBottom: 6, textAlign: 'left', color: textColor }}>{selectedItem.name}</ThemedText>
+                  <ThemedText style={{ fontSize: 15, marginBottom: 10, textAlign: 'left', color: textColor }}>{selectedItem.description}</ThemedText>
+                  <ThemedText style={{ fontSize: 14, color: textColor, opacity: 0.6, marginBottom: 2, textAlign: 'left' }}>Restaurant: {selectedItem.restaurantName}</ThemedText>
+                  <ThemedText style={{ fontSize: 14, color: textColor, opacity: 0.6, marginBottom: 10, textAlign: 'left' }}>Cuisine: {selectedItem.cuisine?.name ? selectedItem.cuisine.name : ''}</ThemedText>
                   <ThemedText style={{ fontSize: 18, color: primary, fontWeight: 'bold', marginBottom: 16, textAlign: 'left' }}>৳{selectedItem.price}</ThemedText>
                   {(() => {
                     const cartItem = cart.find(ci => ci._id === selectedItem._id);
@@ -275,7 +275,7 @@ export default function HomeScreen() {
                           >
                             <Ionicons name="remove-circle-outline" size={28} color={primary} />
                           </TouchableOpacity>
-                          <ThemedText style={{ marginHorizontal: 16, fontSize: 18, color: '#222' }}>{cartItem.quantity}</ThemedText>
+                          <ThemedText style={{ marginHorizontal: 16, fontSize: 18, color: textColor }}>{cartItem.quantity}</ThemedText>
                           <TouchableOpacity
                             style={{ padding: 2 }}
                             onPress={() => addToCart({ ...selectedItem, quantity: 1, restaurantId: selectedItem.restaurantId })}
@@ -372,5 +372,11 @@ const styles = StyleSheet.create({
     height: 100,
     borderRadius: 10,
     backgroundColor: '#eee',
+  },
+  modalContent: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    alignItems: 'center',
   },
 });
