@@ -14,6 +14,7 @@ const { width } = Dimensions.get('window');
 const RESTAURANT_CARD_WIDTH = width * 0.8;
 
 // Type definitions for API data
+
 interface Cuisine {
   _id: string;
   name: string;
