@@ -28,7 +28,7 @@ const typeOptions = [
 export default function TopupsPage() {
     const colorScheme = useColorScheme() ?? 'light';
     const colors = Colors[colorScheme];
-    const { token, user, logout } = useAuth();
+    const { token, logout } = useAuth();
     const router = useRouter();
     const params = useLocalSearchParams();
 
