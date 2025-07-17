@@ -93,8 +93,8 @@ export default function ConfirmOrderPage() {
         let dayJson = restaurant.openingHours[dayName];
         if (dayJson && dayJson.open) {
             const now = today.getHours();
-
-            if (Number(dayJson.start) <= now && Number(dayJson.end) >= now) {
+            // Allow today as minimum if now is before opening or within opening hours
+            if ((Number(dayJson.start) <= now && Number(dayJson.end) >= now) || (now < Number(dayJson.start))) {
                 setIsOpenToday(true);
             }
         }
@@ -215,17 +215,59 @@ export default function ConfirmOrderPage() {
 
                 {restaurant && (
                     <View style={styles.section}>
-                        {!isOpenToday ? (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, marginBottom: 4 }}>
-                                <MaterialIcons name="info" size={28} color={"#f00"} />
-                                <Text style={{ fontSize: 15, paddingHorizontal: 5, fontWeight: '600', color: '#f00', opacity: 0.7 }}>Canteen is closed for today. You can preorder for later.</Text>
-                            </View>
-                        ) : (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, marginBottom: 4 }}>
-                                <MaterialIcons name="check-circle" size={28} color={"#4caf50"} />
-                                <Text style={{ fontSize: 15, paddingHorizontal: 5, fontWeight: '600', color: '#4caf50', opacity: 0.7 }}>Canteen is open today!</Text>
-                            </View>
-                        )}
+                        {(() => {
+                            // Get today's opening hours for the message
+                            let message = '';
+                            let iconColor = '#4caf50'; // green
+                            let iconName: 'check-circle' | 'info' | 'error' = 'check-circle';
+                            
+                            if (restaurant) {
+                                const days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+                                const today = new Date();
+                                const dayName = days[today.getDay()];
+                                const dayJson = restaurant.openingHours[dayName];
+                                
+                                if (dayJson && dayJson.open) {
+                                    const now = today.getHours();
+                                    const startHour = Number(dayJson.start);
+                                    const endHour = Number(dayJson.end);
+                                    
+                                    if (now >= startHour && now <= endHour) {
+                                        // Canteen is currently open
+                                        message = 'Canteen is open now.';
+                                        iconColor = '#4caf50'; // green
+                                        iconName = 'check-circle';
+                                    } else if (now < startHour) {
+                                        // Canteen hasn't opened yet today
+                                        const date = new Date();
+                                        date.setHours(startHour, 0, 0, 0);
+                                        const openingTime = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                        message = `Canteen is closed now. Will open at ${openingTime}. You can order now & collect at opening time.`;
+                                        iconColor = '#ffb300'; // yellow
+                                        iconName = 'info';
+                                    } else {
+                                        // Canteen is closed for today (after closing time)
+                                        message = 'Canteen is closed for today. You can preorder for later.';
+                                        iconColor = '#f00'; // red
+                                        iconName = 'error';
+                                    }
+                                } else {
+                                    // Restaurant is closed today
+                                    message = 'Canteen is closed for today. You can preorder for later.';
+                                    iconColor = '#f00'; // red
+                                    iconName = 'error';
+                                }
+                            }
+                            
+                            return (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, marginBottom: 4 }}>
+                                    <MaterialIcons name={iconName} size={28} color={iconColor} />
+                                    <Text style={{ fontSize: 15, paddingHorizontal: 5, fontWeight: '600', color: iconColor, opacity: 0.85 }}>
+                                        {message}
+                                    </Text>
+                                </View>
+                            );
+                        })()}
                         <View style={[styles.restaurantDetails, { backgroundColor: secondaryBg }]}>
                             <View style={styles.restaurantHeader}>
                                 <Image source={{ uri: restaurant.logo }} style={styles.restaurantLogo} />
