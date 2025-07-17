@@ -1,11 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
 import { router } from 'expo-router';
 import React, {
-  createContext,
-  ReactNode,
-  useContext,
-  useEffect,
-  useState,
+    createContext,
+    ReactNode,
+    useContext,
+    useEffect,
+    useState,
 } from 'react';
 
 interface User {
@@ -16,6 +17,10 @@ interface User {
   name: string;
   phoneNumber: string;
   studentId: string;
+  staff: {
+    isStaff: boolean;
+    access: string;
+  };
 }
 
 interface AuthContextType {
@@ -24,6 +29,13 @@ interface AuthContextType {
   isAuthLoaded: boolean;
   setAuth: (auth: { user: User; token: string }) => Promise<void>;
   logout: () => Promise<void>;
+  updateProfile: (profileData: {
+    name: string;
+    email: string;
+    institute: string;
+    studentId: string;
+    phoneNumber: string;
+  }) => Promise<{ success: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -32,6 +44,7 @@ const AuthContext = createContext<AuthContextType>({
   isAuthLoaded: false,
   setAuth: async () => { },
   logout: async () => { },
+  updateProfile: async () => ({ success: false }),
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -71,6 +84,50 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const updateProfile = async (profileData: {
+    name: string;
+    email: string;
+    institute: string;
+    studentId: string;
+    phoneNumber: string;
+  }) => {
+    try {
+      if (!token) {
+        return { success: false, error: 'No authentication token found' };
+      }
+
+      const response = await axios.post(
+        'https://ourcanteennbackend.vercel.app/api/auth/profileupdate',
+        profileData,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response.data.token && response.data.user) {
+        // Update the stored user data and token
+        await setAuth({ user: response.data.user, token: response.data.token });
+        return { success: true };
+      } else {
+        return { success: false, error: 'Invalid response from server' };
+      }
+    } catch (error: any) {
+      console.error('Profile update failed:', error);
+
+      if (error.response.status === 403) {
+        logout();
+      }
+
+      if (error.response?.data?.error) {
+        return { success: false, error: error.response.data.error };
+      }
+      return { success: false, error: 'Failed to update profile' };
+    }
+  };
+
   const logout = async () => {
     try {
       setUser(null);
@@ -87,7 +144,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider
-      value={{ user, token, isAuthLoaded, setAuth, logout }}
+      value={{ user, token, isAuthLoaded, setAuth, logout, updateProfile }}
     >
       {children}
     </AuthContext.Provider>

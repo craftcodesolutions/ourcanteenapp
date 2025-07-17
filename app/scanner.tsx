@@ -14,13 +14,14 @@ export default function ScannerScreen() {
   const [orderInfo, setOrderInfo] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
-  const { token } = useAuth();
+  const { token, logout, user } = useAuth();
   const [modalVisible, setModalVisible] = useState(false);
 
   const [qrOrderId, setQrOrderId] = useState<string | null>(null);
   const [qrUserId, setQrUserId] = useState<string | null>(null);
   const [successModalVisible, setSuccessModalVisible] = useState(false);
   const [successLoading, setSuccessLoading] = useState(false);
+  const [insufficientModalVisible, setInsufficientModalVisible] = useState(false);
 
   const isPermissionGranted = Boolean(permission?.granted);
 
@@ -39,7 +40,7 @@ export default function ScannerScreen() {
           },
         }
       );
-      
+
       if (response.data.success) {
         setOrderInfo(response.data.order);
         setModalVisible(true);
@@ -49,9 +50,14 @@ export default function ScannerScreen() {
       } else {
         setError('Failed to update order status');
       }
-      
+
     } catch (err: any) {
-      if (err.response && err.response.data && err.response.data.error) {
+      if (err.response?.status === 403) {
+        logout();
+        router.push("/(auth)/signin");
+      } else if (err.response && err.response.status === 406) {
+        setInsufficientModalVisible(true);
+      } else if (err.response && err.response.data && err.response.data.error) {
         setError(err.response.data.error);
       } else {
         setError('Network error');
@@ -75,9 +81,13 @@ export default function ScannerScreen() {
         setError('Invalid QR code data');
       }
     } catch (e: any) {
+      setScanned(false);
+      setScannedData(null);
       console.log(e.message);
-      setError('Failed to parse QR code');
+      // setError('Failed to parse QR code');
     }
+
+    console.log(scannedData);
   };
 
   const handleSuccess = async () => {
@@ -99,7 +109,12 @@ export default function ScannerScreen() {
         setSuccessModalVisible(true);
       }
     } catch (err: any) {
-      setError(err?.response?.data?.error || 'Failed to update order status');
+      if (err.response?.status === 403) {
+        logout();
+        router.push("/(auth)/signin");
+      } else {
+        setError(err?.response?.data?.error || 'Failed to update order status');
+      }
     }
     setSuccessLoading(false);
   };
@@ -120,7 +135,7 @@ export default function ScannerScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* <TouchableOpacity
+      <TouchableOpacity
         style={styles.backButton}
         onPress={() => router.back()}
         accessibilityLabel="Go back"
@@ -128,7 +143,7 @@ export default function ScannerScreen() {
         activeOpacity={0.7}
       >
         <Ionicons name="arrow-back" size={26} color="#8e24aa" />
-      </TouchableOpacity> */}
+      </TouchableOpacity>
       <View style={styles.container}>
         <Text style={styles.title}>Scan a QR Code</Text>
         <View style={styles.cameraContainer}>
@@ -224,7 +239,7 @@ export default function ScannerScreen() {
             </View>
           </Modal>
         )}
-        {scanned && (
+        {scanned && !loading && (
           <TouchableOpacity style={styles.scanAgainButton} onPress={() => { setScanned(false); setScannedData(null); }}>
             <Text style={styles.scanAgainText}>Scan Again</Text>
           </TouchableOpacity>
@@ -251,6 +266,44 @@ export default function ScannerScreen() {
                   setQrOrderId(null);
                   setQrUserId(null);
                 }}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+        {/* Insufficient Balance Modal */}
+        <Modal
+          visible={insufficientModalVisible}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={() => setInsufficientModalVisible(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 32, alignItems: 'center', width: '80%' }}>
+              <Ionicons name="alert-circle" size={48} color="#b71c1c" style={{ marginBottom: 12 }} />
+              <Text style={{ color: '#b71c1c', fontSize: 20, fontWeight: 'bold', marginBottom: 8 }}>Insufficient Balance</Text>
+              <Text style={{ color: '#666', fontSize: 15, textAlign: 'center', marginBottom: 24 }}>The user does not have enough balance to complete this order.</Text>
+
+              {user?.staff.access === "A" ?
+                <TouchableOpacity
+                  style={{ backgroundColor: '#8e24aa', borderRadius: 8, paddingVertical: 12, paddingHorizontal: 32, marginBottom: 12 }}
+                  onPress={() => {
+                    setInsufficientModalVisible(false);
+                    if (qrUserId) {
+                      router.push({ pathname: '/topups', params: { userId: qrUserId, type: 'uid' } });
+                    }
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Go to Top Up</Text>
+                </TouchableOpacity>
+                :
+                <Text style={{ color: '#666',fontWeight: 800, fontSize: 15, textAlign: 'center', marginBottom: 24 }}>User Needs to do topup from authorized personale.</Text>
+              }
+
+              <TouchableOpacity
+                style={{ backgroundColor: '#888', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 28 }}
+                onPress={() => setInsufficientModalVisible(false)}
               >
                 <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Close</Text>
               </TouchableOpacity>

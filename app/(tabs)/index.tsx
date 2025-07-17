@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { Ionicons } from '@expo/vector-icons';
+import axios from 'axios';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -54,7 +55,7 @@ export default function HomeScreen() {
   const cardBg = Colors[colorScheme].background;
   const textColor = Colors[colorScheme].text;
   // const iconColor = Colors[colorScheme].icon;
-  const { token, user } = useAuth();
+  const { token, user, logout } = useAuth();
   const router = useRouter();
   const { cart, addToCart, removeFromCart, pendingItem, confirmAddFromNewRestaurant } = useCart();
 
@@ -64,21 +65,28 @@ export default function HomeScreen() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
+  const [creditBalance, setCreditBalance] = useState<number | null>(null);
+  const [showCredit, setShowCredit] = useState(false);
+  const [creditLoading, setCreditLoading] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       setError('');
       try {
-        const res = await fetch('https://ourcanteennbackend.vercel.app/api/user/resnmenu', {
+        const res = await axios.get('https://ourcanteennbackend.vercel.app/api/user/resnmenu', {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!res.ok) throw new Error('Failed to fetch data');
-        const data = await res.json();
+
+        const data = res.data;
         setRestaurants(data.restaurants || []);
         setMenuItems(data.allmenuitems || []);
-      } catch (e) {
+      } catch (e: any) {
         console.log(e);
+        if (e.response?.status === 403) {
+          logout();
+          router.push("/(auth)/signin");
+        }
         setError('Failed to load data. Please try again.');
       } finally {
         setLoading(false);
@@ -104,6 +112,37 @@ export default function HomeScreen() {
   const openItemModal = (item: MenuItem) => {
     setSelectedItem(item);
     setModalVisible(true);
+  };
+
+  const fetchCreditBalance = async () => {
+    if (!token) return;
+
+    setCreditLoading(true);
+    try {
+      const res = await axios.get('https://ourcanteennbackend.vercel.app/api/user/credit', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const data = res.data;
+      setCreditBalance(data.credit);
+      setShowCredit(true);
+
+      // Hide credit balance after 3 seconds
+      setTimeout(() => {
+        setShowCredit(false);
+      }, 3000);
+
+    } catch (error: any) {
+      // console.error('Error fetching credit balance:', error);
+      Alert.alert('Error', 'Failed to fetch credit balance. Please try again.');
+
+      if (error.response?.status === 403) {
+        logout();
+        router.push("/(auth)/signin");
+      }
+    } finally {
+      setCreditLoading(false);
+    }
   };
 
   const renderRestaurant = ({ item }: { item: Restaurant }) => (
@@ -199,11 +238,67 @@ export default function HomeScreen() {
           contentContainerStyle={{ paddingBottom: 48, flexGrow: 1 }}
           showsVerticalScrollIndicator={false}
         >
-          <View style={{ marginTop: 18, marginBottom: 8, marginLeft: 18 }}>
-            <ThemedText type="title" style={{ fontSize: 22, fontWeight: '700' }}>
-              {user?.name ? `Welcome, ${user.name}!` : 'Welcome!'}
-            </ThemedText>
+
+          {/* User top bar with facility of check credit amount */}
+          <View style={{ marginTop: 10, marginBottom: 8, marginHorizontal: 18 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <ThemedText type="title" style={{ fontSize: 18, fontWeight: 'bold' }}>
+                {user?.name}
+              </ThemedText>
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flex: 0,
+                backgroundColor: '#d32f2f',
+                paddingHorizontal: 12,
+                borderRadius: 10,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.10,
+                shadowRadius: 4,
+                elevation: 2,
+                minWidth: 150,
+              }}>
+                {showCredit ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons
+                      name="wallet-outline"
+                      size={16}
+                      color={'#fff'}
+                      style={{ marginRight: 8 }}
+                    />
+                    <ThemedText type="title" style={{ fontSize: 14, fontWeight: '900', color: '#fff' }}>
+                      ৳ {creditBalance || 0}
+                    </ThemedText>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    onPress={fetchCreditBalance}
+                    disabled={creditLoading}
+                    style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <Ionicons
+                      name="wallet-outline"
+                      size={16}
+                      color={'#fff'}
+                      style={{ marginRight: 8 }}
+                    />
+
+                    <ThemedText type="title" style={{ fontSize: 13, fontWeight: 'bold', marginRight: 8, color: '#fff', textAlign: 'center' }}>
+                      {!creditLoading && 'Balance'}
+                    </ThemedText>
+
+                    {creditLoading && (
+                      <ActivityIndicator size="small" color={'#fff'} />
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
           </View>
+
+
           <View style={{ marginTop: 10, marginBottom: 18 }}>
             <ThemedText type="title" style={{ fontSize: 20, fontWeight: '700', marginLeft: 18 }}>Restaurants</ThemedText>
             <FlatList

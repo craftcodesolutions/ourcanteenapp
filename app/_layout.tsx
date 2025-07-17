@@ -24,6 +24,13 @@ export default function RootLayout() {
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="(auth)" options={{ headerShown: false }} />
           <Stack.Screen name="(admin)" options={{ headerShown: false }} />
+          <Stack.Screen name="(staff)" options={{ headerShown: false }} />
+          <Stack.Screen name="adminorders" options={{ headerShown: false }} />
+          <Stack.Screen name="staffs" options={{ headerShown: false }} />
+          <Stack.Screen name="topups" options={{ headerShown: false }} />
+          <Stack.Screen name="topups/[date]" options={{ headerShown: false }} />
+          <Stack.Screen name="adminorders/[date]" options={{ headerShown: false }} />
+          <Stack.Screen name="scanner" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="restaurant/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="confirmorder" options={{ headerShown: false }} />

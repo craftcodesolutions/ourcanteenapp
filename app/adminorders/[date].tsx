@@ -3,7 +3,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { MaterialIcons } from '@expo/vector-icons';
 import axios from 'axios';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -28,9 +28,21 @@ interface Order {
   updatedAt: string;
 }
 
-const OrdersPage = () => {
+interface ClassifiedOrderStats {
+  totalOrders: number;
+  pendingOrders: number;
+  successOrders: number;
+}
+
+interface ClassifiedOrderGroup {
+  stats: ClassifiedOrderStats;
+  orders: Order[];
+}
+
+const OrdersByDatePage = () => {
   const { token, isAuthLoaded, logout } = useAuth();
-  const [orders, setOrders] = useState<Order[]>([]);
+  const { date } = useLocalSearchParams<{ date: string }>();
+  const [group, setGroup] = useState<ClassifiedOrderGroup | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const colorScheme = useColorScheme() ?? 'light';
@@ -52,6 +64,14 @@ const OrdersPage = () => {
     "July", "August", "September", "October", "November", "December"
   ];
 
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const day = date.getDate();
+    const month = monthNames[date.getMonth()];
+    const year = date.getFullYear();
+    return `${day} ${month} ${year}`;
+  };
+
   useEffect(() => {
     if (!isAuthLoaded) return;
     if (!token) {
@@ -62,13 +82,14 @@ const OrdersPage = () => {
     setLoading(true);
     setError(null);
     
-    axios.get('https://ourcanteennbackend.vercel.app/api/user/order', {
+    axios.get('https://ourcanteennbackend.vercel.app/api/owner/orderclssified', {
       headers: {
         Authorization: `Bearer ${token}`,
       },
     })
       .then((response) => {
-        setOrders(response.data.orders || []);
+        const data = response.data;
+        setGroup(data && date && data[date] ? data[date] : null);
         setLoading(false);
       })
       .catch((error) => {
@@ -76,51 +97,68 @@ const OrdersPage = () => {
           logout();
           router.push("/(auth)/signin");
         } else {
-          setError(error.response?.data?.message || error.message || 'Failed to fetch orders');
-          setLoading(false);
+          setError(error.response?.data || error.message || 'Failed to fetch orders');
         }
+        setLoading(false);
       });
-  }, [token, isAuthLoaded, logout, router]);
+  }, [token, isAuthLoaded, date, logout, router]);
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.center, { backgroundColor: cardBg }]}>
+      <SafeAreaView style={[styles.center, { backgroundColor: cardBg }]}> 
         <ActivityIndicator size="large" color={statusColor} />
-        <Text style={{ color: textColor, marginTop: 12 }}>Loading your orders...</Text>
+        <Text style={{ color: textColor, marginTop: 12 }}>Loading orders...</Text>
       </SafeAreaView>
     );
   }
 
   if (error) {
     return (
-      <SafeAreaView style={[styles.center, { backgroundColor: cardBg }]}>
+      <SafeAreaView style={[styles.center, { backgroundColor: cardBg }]}> 
         <MaterialIcons name="error-outline" size={48} color={statusColor} style={{ marginBottom: 16 }} />
         <Text style={{ color: textColor, fontSize: 16, textAlign: 'center' }}>{error}</Text>
       </SafeAreaView>
     );
   }
 
-  if (!orders.length) {
+  if (!group || !group.orders.length) {
     return (
-      <SafeAreaView style={[styles.center, { backgroundColor: cardBg }]}>
+      <SafeAreaView style={[styles.center, { backgroundColor: cardBg }]}> 
         <MaterialIcons name="receipt" size={64} color={emptyIconColor} style={{ marginBottom: 16 }} />
-        <Text style={[styles.emptyText, { color: emptyTextColor }]}>You have no orders yet.</Text>
+        <Text style={[styles.emptyText, { color: emptyTextColor }]}>No orders for this date.</Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: cardBg }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: cardBg }]}> 
       <View style={styles.headerWrapper}>
-        <Text style={[styles.pageTitle, { color: textColor }]}>My Orders</Text>
+        <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
+          <MaterialIcons name="arrow-back" size={24} color={statusColor} />
+        </TouchableOpacity>
+        <Text style={[styles.pageTitle, { color: textColor }]}>Orders for {formatDate(date)}</Text>
       </View>
       <View style={[styles.divider, { backgroundColor: dividerColor }]} />
+      <View style={{ flexDirection: 'row', marginLeft: 0, gap: 12, marginTop: 8, marginBottom: 16, paddingHorizontal: 16 }}>
+        <View style={{ flex: 1, backgroundColor: colorScheme === 'light' ? '#f2f2f2' : '#222', borderRadius: 10, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ color: priceColor, fontSize: 13, fontWeight: '600' }}>Total</Text>
+          <Text style={{ color: priceColor, fontSize: 18, fontWeight: 'bold', marginTop: 2 }}>{group.stats.totalOrders}</Text>
+        </View>
+        <View style={{ flex: 1, backgroundColor: colorScheme === 'light' ? '#fffbe6' : '#333', borderRadius: 10, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ color: subtotalColor, fontSize: 13, fontWeight: '600' }}>Pending</Text>
+          <Text style={{ color: subtotalColor, fontSize: 18, fontWeight: 'bold', marginTop: 2 }}>{group.stats.pendingOrders}</Text>
+        </View>
+        <View style={{ flex: 1, backgroundColor: colorScheme === 'light' ? '#e6ffed' : '#1e3a1e', borderRadius: 10, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ color: statusColor, fontSize: 13, fontWeight: '600' }}>Success</Text>
+          <Text style={{ color: statusColor, fontSize: 18, fontWeight: 'bold', marginTop: 2 }}>{group.stats.successOrders}</Text>
+        </View>
+      </View>
       <FlatList
-        data={orders}
+        data={group.orders}
         keyExtractor={(order) => order._id}
-        contentContainerStyle={{ paddingTop: 8, paddingBottom: 48 }}
+        contentContainerStyle={{ paddingBottom: 48 }}
         renderItem={({ item: order }) => (
-          <View style={[styles.orderContainer, { backgroundColor: itemBg, shadowColor: itemShadow }]}>
+          <View style={[styles.orderContainer, { backgroundColor: itemBg, shadowColor: itemShadow }]}> 
             <View style={styles.orderHeader}>
               <Text style={[styles.orderId, { color: priceColor }]}>Order ID: {order._id.slice(-9).toUpperCase()}</Text>
               <Text style={[styles.status, { color: statusColor }]}>{order.status}</Text>
@@ -141,28 +179,13 @@ const OrdersPage = () => {
                 </View>
               )}
             />
-
-            <View style={[styles.orderFooter, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
+            <View style={[styles.orderFooter, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}> 
               <View>
                 <Text style={[styles.total, { color: nameColor }]}>Total: ৳{order.total.toFixed(2)}</Text>
                 <Text style={[styles.collectionDate, { color: nameColor }]}>Collection: {`${new Date(order.collectionTime).getDate()} ${monthNames[new Date(order.collectionTime).getMonth()]} ${new Date(order.collectionTime).getFullYear()}`}</Text>
               </View>
-              {order.status !== 'SUCCESS' && (
-                <TouchableOpacity
-                  style={{ marginLeft: 12, flexDirection: 'row', alignItems: 'center' }}
-                  onPress={() => {
-                    const data = { orderId: order._id, userId: order.userId };
-                    const encodedData = encodeURIComponent(JSON.stringify(data));
-                    router.push({ pathname: '/qr', params: { data: encodedData } });
-                  }}
-                >
-                  <MaterialIcons name="qr-code" size={28} color={statusColor} style={{ marginRight: 6 }} />
-                  <Text style={{ color: statusColor, fontWeight: 'bold' }}>Show QR</Text>
-                </TouchableOpacity>
-              )}
+              
             </View>
-
-
           </View>
         )}
       />
@@ -176,6 +199,8 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   headerWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingTop: 18,
     paddingBottom: 8,
     paddingHorizontal: 24,
@@ -275,4 +300,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default OrdersPage;
+export default OrdersByDatePage; 

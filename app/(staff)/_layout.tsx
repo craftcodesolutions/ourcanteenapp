@@ -1,5 +1,5 @@
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { Tabs, Redirect } from 'expo-router';
+import { Tabs } from 'expo-router';
 import React, { useState } from 'react';
 import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
@@ -8,7 +8,6 @@ import { HapticTab } from '@/components/HapticTab';
 import { FontAwesome, MaterialIcons } from '@expo/vector-icons';
 
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuth } from '@/context/AuthContext';
 
 // Custom Tab Bar with Animated Indicator
 type CustomTabBarProps = {
@@ -130,30 +129,10 @@ function CustomTabBar({ state, descriptors, navigation, position }: CustomTabBar
 }
 
 export default function TabLayout() {
-  const { user, isAuthLoaded } = useAuth();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const tabBarBg = isDark ? '#18181b' : '#fff';
   const borderColor = isDark ? '#27272a' : '#eee';
-
-  // Authentication guard for admin routes
-  if (!isAuthLoaded) {
-    return null; // Show loading
-  }
-
-  if (!user) {
-    return <Redirect href="/(auth)/signin" />;
-  }
-
-  // Check if user is an owner
-  if (!user.isOwner) {
-    // Redirect based on user type
-    if (user.staff && user.staff.isStaff) {
-      return <Redirect href="/(staff)/manage" />;
-    } else {
-      return <Redirect href="/(tabs)" />;
-    }
-  }
 
   return (
     <Tabs
@@ -168,21 +147,6 @@ export default function TabLayout() {
           height: 56,
         },
       }}>
-
-      <Tabs.Screen
-        name="restaurants"
-        options={{
-          title: 'Canteen',
-          tabBarIcon: ({ color }) => <MaterialIcons name="restaurant" size={18} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="menu"
-        options={{
-          title: 'Menu',
-          tabBarIcon: ({ color }) => <MaterialIcons name="menu-book" size={18} color={color} />,
-        }}
-      />
       <Tabs.Screen
         name="manage"
         options={{

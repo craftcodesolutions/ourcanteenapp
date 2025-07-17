@@ -3,7 +3,8 @@ import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import axios from 'axios';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -51,7 +52,7 @@ export default function RestaurantDetail() {
   const primary = Colors[colorScheme].tint;
   const cardBg = Colors[colorScheme].background;
   const textColor = Colors[colorScheme].text;
-  const { token } = useAuth();
+  const { token, logout } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { cart, addToCart, removeFromCart, pendingItem, confirmAddFromNewRestaurant } = useCart();
@@ -64,21 +65,44 @@ export default function RestaurantDetail() {
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [modalQuantity, setModalQuantity] = useState(1);
 
+  const [isOpenToday, setIsOpenToday] = useState(false);
+
+  useEffect(() => {
+    const days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+    const today = new Date();
+    const dayName = days[today.getDay()];
+
+    let dayJson = restaurant?.openingHours[dayName];
+    if (dayJson && dayJson.open) {
+      const now = today.getHours();
+
+      if (Number(dayJson.start) <= now && Number(dayJson.end) >= now) {
+        setIsOpenToday(true);
+      }
+
+    }
+
+  }, [restaurant]);
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       setError('');
       try {
-        const res = await fetch(`https://ourcanteennbackend.vercel.app/api/user/res/${id}`, {
+        const res = await axios.get(`https://ourcanteennbackend.vercel.app/api/user/res/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!res.ok) throw new Error('Failed to fetch data');
-        const data = await res.json();
-        setRestaurant(data.restaurant);
-        setMenuByCuisine(data.menuByCuisine || {});
-      } catch (e) {
+        setRestaurant(res.data.restaurant);
+        setMenuByCuisine(res.data.menuByCuisine || {});
+      } catch (e: any) {
         console.log(e);
-        setError('Failed to load data. Please try again.');
+
+        if (e.response?.status === 403) {
+          logout();
+          router.push("/(auth)/signin");
+        }
+
+        setError(e.response?.data?.error || 'Failed to load data. Please try again.');
       } finally {
         setLoading(false);
       }
@@ -129,7 +153,7 @@ export default function RestaurantDetail() {
       <ScrollView contentContainerStyle={{ paddingBottom: 48 }} showsVerticalScrollIndicator={false}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.replace('/')}
+          onPress={() => router.back()}
           activeOpacity={0.7}
         >
           <Ionicons name="arrow-back" size={26} color={primary} />
@@ -143,6 +167,14 @@ export default function RestaurantDetail() {
             <ThemedText style={{ fontSize: 13, color: textColor, opacity: 0.6 }}>{restaurant.location}</ThemedText>
           </View>
         </View>
+
+        {!isOpenToday && (
+          <View style={{ marginTop: 18, paddingHorizontal: 10, marginHorizontal: 15, flexDirection: 'row', alignItems: 'center', backgroundColor: '#d32f2f', borderRadius: 10, padding: 10 }}>
+            <MaterialIcons name="info" size={28} color={"#fff"} />
+            <ThemedText style={{ fontSize: 15, paddingHorizontal: 5, fontWeight: '600', color: '#fff', opacity: 0.7 }}>Canteen is closed for today. Still You can preorder for later.</ThemedText>
+          </View>
+        )}
+
         <View style={{ marginTop: 18, marginHorizontal: 18 }}>
           <ThemedText type="title" style={{ fontSize: 20, fontWeight: '700', marginBottom: 8 }}>Menu</ThemedText>
           {Object.entries(menuByCuisine).length === 0 ? (

@@ -10,6 +10,7 @@ import { useAuth } from '@/context/AuthContext';
 import { uploadToCloudinary } from '@/utils/cloudinary';
 import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
+import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 
 const { width } = Dimensions.get('window');
@@ -34,7 +35,7 @@ export default function RestaurantScreen() {
   const textColor = Colors[colorScheme].text;
   const iconColor = Colors[colorScheme].icon;
 
-  const { token } = useAuth();
+  const { token, logout } = useAuth();
 
   const [restaurant, setRestaurant] = useState<null | {
     _id: string;
@@ -145,12 +146,15 @@ export default function RestaurantScreen() {
       // Refresh config data to get any new cuisines that were added
       await fetchConfig();
     } catch (error: any) {
-      console.log(error.response.data)
+      console.log(error.response?.data)
       if (error.response) {
         if (error.response.status === 400) {
           alert('Please select at least one cuisine');
-        } else if (error.response.status === 401 || error.response.status === 403) {
+        } else if (error.response.status === 401) {
           alert('Authentication error. Please login again.');
+        } else if (error.response.status === 403) {
+          logout();
+          router.replace("/(auth)/signin");
         } else {
           alert('Failed to update cuisines. Please try again.');
         }
@@ -348,6 +352,11 @@ export default function RestaurantScreen() {
       setConfig(response.data);
       return response.data; // Return the config data
     } catch (error: any) {
+      if (error.response?.status === 403) {
+        logout();
+        router.replace('/(auth)/signin');
+        return null;
+      }
       console.error('Failed to fetch config:', error);
       // Don't show alert for config fetch failure, just log it
       return null;
@@ -391,11 +400,13 @@ export default function RestaurantScreen() {
       } catch (err: any) {
         if (!isMounted) return;
         if (err.response) {
-          console.log(err.response.data)
           if (err.response.status === 404) {
             setRestaurant(null);
           } else if (err.response.status === 401) {
             alert('You are not owner');
+          } else if (err.response.status === 403) {
+            logout();
+            router.replace('/(auth)/signin');
           } else {
             alert('An error occurred');
           }
@@ -975,6 +986,9 @@ export default function RestaurantScreen() {
                         .catch(err => {
                           if (err.response && err.response.data && err.response.data.message) {
                             alert(err.response.data.message);
+                          } else if (err.response && err.response.status === 403) {
+                            logout();
+                            router.replace('/(auth)/signin');
                           } else {
                             alert('Failed to create restaurant');
                           }
@@ -999,6 +1013,9 @@ export default function RestaurantScreen() {
                         .catch(err => {
                           if (err.response && err.response.data && err.response.data.message) {
                             alert(err.response.data.message);
+                          } else if (err.response && err.response.status === 403) {
+                            logout();
+                            router.replace('/(auth)/signin');
                           } else {
                             alert('Failed to update restaurant');
                           }

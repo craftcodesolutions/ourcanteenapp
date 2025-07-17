@@ -5,7 +5,9 @@ import { useAuth } from '@/context/AuthContext';
 import { uploadToCloudinary } from '@/utils/cloudinary';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
+import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
+import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Modal, ScrollView, StyleSheet, Switch, TextInput, TouchableOpacity, useColorScheme, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -28,6 +30,7 @@ interface Cuisine {
 
 interface Config {
   cuisines: Cuisine[];
+  ownCuisine: Cuisine[];
 }
 
 interface MenuForm {
@@ -41,7 +44,7 @@ interface MenuForm {
 }
 
 export default function MenuScreen() {
-  const { token } = useAuth();
+  const { token, logout } = useAuth();
   const colorScheme = useColorScheme() ?? 'light';
   const primary = Colors[colorScheme].tint;
   const cardBg = Colors[colorScheme].background;
@@ -63,7 +66,7 @@ export default function MenuScreen() {
     available: true,
   });
   const [uploadingImage, setUploadingImage] = useState(false);
-  const [config, setConfig] = useState<Config>({ cuisines: [] });
+  const [config, setConfig] = useState<Config>({ cuisines: [], ownCuisine: [] });
   const [configLoading, setConfigLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -71,13 +74,16 @@ export default function MenuScreen() {
   const fetchMenu = async () => {
     setLoading(true);
     try {
-      const res = await fetch('https://ourcanteennbackend.vercel.app/api/owner/resmenu', {
+      const response = await axios.get('https://ourcanteennbackend.vercel.app/api/owner/resmenu', {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error('Failed to fetch menu');
-      const data: MenuItem[] = await res.json();
-      setMenuItems(data);
-    } catch (e) {
+      setMenuItems(response.data);
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        logout();
+        router.push("/(auth)/signin");
+        return;
+      }
       setMenuItems([]);
     } finally {
       setLoading(false);
@@ -88,14 +94,17 @@ export default function MenuScreen() {
   const fetchConfig = async () => {
     setConfigLoading(true);
     try {
-      const res = await fetch('https://ourcanteennbackend.vercel.app/api/owner/config', {
+      const response = await axios.get('https://ourcanteennbackend.vercel.app/api/owner/mycuis', {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error('Failed to fetch config');
-      const data: Config = await res.json();
-      setConfig(data);
-    } catch (e) {
-      setConfig({ cuisines: [] });
+      setConfig(response.data);
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        logout();
+        router.push("/(auth)/signin");
+        return;
+      }
+      setConfig({ cuisines: [], ownCuisine: [] });
     } finally {
       setConfigLoading(false);
     }
@@ -147,6 +156,7 @@ export default function MenuScreen() {
         const url = await uploadToCloudinary(result.assets[0].uri, 'ourcanteen');
         setForm(f => ({ ...f, image: url }));
       } catch (e) {
+        console.log(e)
         alert('Image upload failed');
       } finally {
         setUploadingImage(false);
@@ -171,27 +181,28 @@ export default function MenuScreen() {
         available: form.available,
         ...(isEditing ? { _id: form._id } : {}),
       };
-      const res = await fetch('https://ourcanteennbackend.vercel.app/api/owner/resmenu', {
+      
+      const response = await axios({
         method: isEditing ? 'PUT' : 'POST',
+        url: 'https://ourcanteennbackend.vercel.app/api/owner/resmenu',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(body),
+        data: body,
       });
-      if (!res.ok) {
-        let errMsg = 'Failed to save';
-        try {
-          const err = await res.json();
-          errMsg = err.error || errMsg;
-        } catch {}
-        throw new Error(errMsg);
-      }
-      const data: MenuItem[] = await res.json();
-      setMenuItems(data);
+      
+      setMenuItems(response.data);
       setModalVisible(false);
-    } catch (e: any) {
-      alert(e?.message || 'Failed to save');
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        logout();
+        router.push("/(auth)/signin");
+        return;
+      }
+      
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to save';
+      alert(errorMessage);
     } finally {
       setSaving(false);
     }
@@ -298,7 +309,7 @@ export default function MenuScreen() {
           onRequestClose={() => setModalVisible(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={[styles.modalContainer, { backgroundColor: cardBg }]}> 
+            <View style={[styles.modalContainer, { backgroundColor: cardBg }]}>
               <View style={styles.modalHeader}>
                 <ThemedText type="title" style={{ fontSize: 20, fontWeight: '700' }}>{isEditing ? 'Edit Food Item' : 'Add Food Item'}</ThemedText>
                 <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeBtn}>
@@ -378,7 +389,7 @@ export default function MenuScreen() {
                       dropdownIconColor={textColor}
                     >
                       <Picker.Item label="Select Cuisine" value="" style={{ fontSize: 14 }} />
-                      {config.cuisines.map(c => (
+                      {config.ownCuisine.map(c => (
                         <Picker.Item key={c._id} label={c.name} value={c._id} style={{ fontSize: 14 }} />
                       ))}
                     </Picker>

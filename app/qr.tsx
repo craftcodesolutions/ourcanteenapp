@@ -1,5 +1,9 @@
 // app/order/qr.tsx
+import { Colors } from '@/constants/Colors';
+import { useAuth } from '@/context/AuthContext';
+import { useColorScheme } from '@/hooks/useColorScheme';
 import { Ionicons } from '@expo/vector-icons';
+import axios from 'axios';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, BackHandler, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -9,6 +13,23 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function QRPage() {
     const { data } = useLocalSearchParams();
     const router = useRouter();
+    const colorScheme = useColorScheme() ?? 'light';
+    const { logout } = useAuth();
+
+    // Theme-aware colors
+    const cardBg = Colors[colorScheme].background;
+    const textColor = Colors[colorScheme].text;
+    const primary = Colors[colorScheme].tint;
+    const safeAreaBg = colorScheme === 'light' ? '#f8f5fc' : '#0a0a0a';
+    const qrCardBg = '#fff';
+    const qrCardShadow = colorScheme === 'light' ? '#000' : '#000';
+    const subtitleColor = colorScheme === 'light' ? '#6d6d6d' : '#9ba1a6';
+    const modalOverlayBg = colorScheme === 'light' ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.6)';
+    const modalContentBg = colorScheme === 'light' ? '#fff' : '#1a1a1a';
+    const modalTextColor = colorScheme === 'light' ? '#333' : '#ececec';
+    const modalButtonBg = colorScheme === 'light' ? '#8e24aa' : '#9c27b0';
+    const backButtonBg = colorScheme === 'light' ? '#fff' : '#1a1a1a';
+    const backButtonShadow = colorScheme === 'light' ? '#000' : '#000';
 
     let jsonData = {};
     try {
@@ -18,7 +39,7 @@ export default function QRPage() {
     }
 
     // Extract orderId and userId from jsonData
-    type QRData = { orderId?: string; userId?: string; [key: string]: any };
+    type QRData = { orderId?: string; userId?: string;[key: string]: any };
     const typedJsonData = jsonData as QRData;
     const orderId = typedJsonData.orderId;
     const userId = typedJsonData.userId;
@@ -33,14 +54,11 @@ export default function QRPage() {
         if (!orderId || !userId) return;
         setIsPolling(true);
         try {
-            const response = await fetch('https://ourcanteennbackend.vercel.app/api/user/status', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ orderId, userId }),
+            const response = await axios.post('https://ourcanteennbackend.vercel.app/api/user/status', {
+                orderId,
+                userId
             });
-            const result = await response.json();
+            const result = response.data;
             if (result.orderStatus) {
                 setOrderStatus(result.orderStatus);
                 if (result.orderStatus === 'SUCCESS') {
@@ -51,6 +69,10 @@ export default function QRPage() {
             }
         } catch (error: any) {
             console.log(error.message);
+            if (error.response?.status === 403) {
+                logout();
+                router.push("/(auth)/signin");
+            }
             // Optionally handle error
         }
         // Only poll again if not SUCCESS
@@ -80,26 +102,32 @@ export default function QRPage() {
     }, [router]);
 
     return (
-        <SafeAreaView style={styles.safeArea}>
+        <SafeAreaView style={[styles.safeArea, { backgroundColor: safeAreaBg }]}>
             <TouchableOpacity
-                style={styles.backButton}
+                style={[styles.backButton, {
+                    backgroundColor: backButtonBg,
+                    shadowColor: backButtonShadow,
+                }]}
                 onPress={() => router.replace("/orders")}
                 accessibilityLabel="Go to Home"
                 accessibilityRole="button"
                 activeOpacity={0.7}
             >
-                <Ionicons name="arrow-back" size={26} color="#8e24aa" />
+                <Ionicons name="arrow-back" size={26} color={primary} />
             </TouchableOpacity>
             <View style={styles.container}>
-                <Text style={styles.title}>Show this QR to the Provider</Text>
-                <View style={styles.qrCard}>
+                <Text style={[styles.title, { color: primary }]}>Show this QR to the Provider</Text>
+                <View style={[styles.qrCard, {
+                    backgroundColor: qrCardBg,
+                    shadowColor: qrCardShadow,
+                }]}>
                     <QRCode value={JSON.stringify(jsonData)} size={220} />
                 </View>
-                <Text style={styles.subtitle}>The provider will scan this code to confirm your order.</Text>
+                <Text style={[styles.subtitle, { color: subtitleColor }]}>The provider will scan this code to confirm your order.</Text>
                 {orderStatus && orderStatus !== 'SUCCESS' && (
                     <View style={{ marginTop: 16, alignItems: 'center' }}>
-                        <ActivityIndicator size="small" color="#8e24aa" />
-                        <Text style={{ color: '#8e24aa', marginTop: 8 }}>Order Status: {orderStatus}</Text>
+                        <ActivityIndicator size="small" color={primary} />
+                        <Text style={{ color: primary, marginTop: 8 }}>Order Status: {orderStatus}</Text>
                     </View>
                 )}
             </View>
@@ -107,17 +135,17 @@ export default function QRPage() {
                 visible={showSuccessModal}
                 transparent
                 animationType="fade"
-                onRequestClose={() => {}}
+                onRequestClose={() => { }}
             >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
+                <View style={[styles.modalOverlay, { backgroundColor: modalOverlayBg }]}>
+                    <View style={[styles.modalContent, { backgroundColor: modalContentBg }]}>
                         <Ionicons name="checkmark-circle" size={64} color="#4caf50" style={{ marginBottom: 16 }} />
                         <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#4caf50', marginBottom: 12 }}>Order Complete!</Text>
-                        <Text style={{ fontSize: 16, color: '#333', marginBottom: 24, textAlign: 'center' }}>
+                        <Text style={{ fontSize: 16, color: modalTextColor, marginBottom: 24, textAlign: 'center' }}>
                             Your order has been successfully completed.
                         </Text>
                         <TouchableOpacity
-                            style={styles.modalButton}
+                            style={[styles.modalButton, { backgroundColor: modalButtonBg }]}
                             onPress={() => {
                                 setShowSuccessModal(false);
                                 router.replace('/');
@@ -136,17 +164,14 @@ export default function QRPage() {
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
-        backgroundColor: '#f8f5fc',
     },
     backButton: {
         position: 'absolute',
         top: 48,
         left: 24,
         zIndex: 10,
-        backgroundColor: '#fff',
         borderRadius: 16,
         padding: 8,
-        shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.08,
         shadowRadius: 2,
@@ -161,16 +186,13 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 20,
         fontWeight: '700',
-        color: '#8e24aa',
         marginBottom: 28,
         marginTop: 32,
         textAlign: 'center',
     },
     qrCard: {
-        backgroundColor: '#fff',
         borderRadius: 24,
         padding: 24,
-        shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.10,
         shadowRadius: 8,
@@ -179,18 +201,15 @@ const styles = StyleSheet.create({
     },
     subtitle: {
         fontSize: 15,
-        color: '#6d6d6d',
         textAlign: 'center',
         marginTop: 8,
     },
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.4)',
         justifyContent: 'center',
         alignItems: 'center',
     },
     modalContent: {
-        backgroundColor: '#fff',
         borderRadius: 20,
         padding: 32,
         alignItems: 'center',
@@ -202,7 +221,6 @@ const styles = StyleSheet.create({
         minWidth: 280,
     },
     modalButton: {
-        backgroundColor: '#8e24aa',
         borderRadius: 12,
         paddingVertical: 12,
         paddingHorizontal: 32,
