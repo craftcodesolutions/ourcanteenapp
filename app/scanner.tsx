@@ -285,7 +285,7 @@ export default function ScannerScreen() {
               <Text style={{ color: '#b71c1c', fontSize: 20, fontWeight: 'bold', marginBottom: 8 }}>Insufficient Balance</Text>
               <Text style={{ color: '#666', fontSize: 15, textAlign: 'center', marginBottom: 24 }}>The user does not have enough balance to complete this order.</Text>
 
-              {user?.staff.access === "A" ?
+              {user?.staff?.access === "A" || user?.isOwner ?
                 <TouchableOpacity
                   style={{ backgroundColor: '#8e24aa', borderRadius: 8, paddingVertical: 12, paddingHorizontal: 32, marginBottom: 12 }}
                   onPress={() => {
@@ -298,7 +298,7 @@ export default function ScannerScreen() {
                   <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Go to Top Up</Text>
                 </TouchableOpacity>
                 :
-                <Text style={{ color: '#666',fontWeight: 800, fontSize: 15, textAlign: 'center', marginBottom: 24 }}>User Needs to do topup from authorized personale.</Text>
+                <Text style={{ color: '#666', fontWeight: 800, fontSize: 15, textAlign: 'center', marginBottom: 24 }}>User Needs to do topup from authorized personnel.</Text>
               }
 
               <TouchableOpacity
