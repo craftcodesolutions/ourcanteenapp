@@ -37,6 +37,9 @@ export default function StaffsPage() {
     const [success, setSuccess] = useState(false);
     const [buttonAnim] = useState(new Animated.Value(1));
     const [deletingStaffId, setDeletingStaffId] = useState<string | null>(null);
+    const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
+    const [editTopupAccess, setEditTopupAccess] = useState<boolean>(false);
+    const [editLoading, setEditLoading] = useState(false);
 
     // Fetch all staff on mount
     useEffect(() => {
@@ -166,6 +169,47 @@ export default function StaffsPage() {
                 },
             ]
         );
+    };
+
+    // Edit staff access handler
+    const handleEditStaff = (staffId: string, currentTopupAccess: boolean) => {
+        setEditingStaffId(staffId);
+        setEditTopupAccess(currentTopupAccess);
+    };
+
+    const handleCancelEdit = () => {
+        setEditingStaffId(null);
+        setEditTopupAccess(false);
+    };
+
+    const handleSaveEdit = async (staffId: string) => {
+        setEditLoading(true);
+        try {
+            const response = await axios.patch('https://ourcanteennbackend.vercel.app/api/owner/staff', {
+                staffId,
+                topupAccess: editTopupAccess,
+            }, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
+            if (response.data.staff) {
+                setStaff(response.data.staff || []);
+                setEditingStaffId(null);
+            } else {
+                Alert.alert('Error', 'Failed to update staff access.');
+            }
+        } catch (error: any) {
+            console.log(error);
+            if (error.response?.status === 403) {
+                logout();
+                router.push("/(auth)/signin");
+                return;
+            }
+            Alert.alert('Error', error.response?.data?.error || 'Network error.');
+        }
+        setEditLoading(false);
     };
 
     const handleButtonPressIn = () => {
@@ -298,21 +342,68 @@ export default function StaffsPage() {
                                         </View>
                                         <View style={{ backgroundColor: colorScheme === 'light' ? '#e6ffed' : '#1e3a1e', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, marginRight: 8 }}>
                                             <Text style={{ color: '#388e3c', fontSize: 12, fontWeight: 'bold' }}>
-                                                {item.staff?.access === 'A' ? 'Admin' : 'Staff'}
+                                                {item.staff?.access === 'N' ? 'Ex Staff' : item.staff?.access === 'A' ? 'Admin' : 'Staff'}
                                             </Text>
                                         </View>
-                                        <TouchableOpacity
-                                            onPress={() => handleDeleteStaff(item._id, item.name || 'this staff member')}
-                                            disabled={deletingStaffId === item._id}
-                                            style={[styles.deleteButton, { backgroundColor: deletingStaffId === item._id ? '#ccc' : '#ff4444' }]}
-                                        >
-                                            {deletingStaffId === item._id ? (
-                                                <ActivityIndicator size="small" color="#fff" />
-                                            ) : (
-                                                <Ionicons name="trash-outline" size={16} color="#fff" />
-                                            )}
-                                        </TouchableOpacity>
+                                        {editingStaffId === item._id ? (
+                                            <></>
+                                        ) : (
+                                            <TouchableOpacity
+                                                onPress={() => handleEditStaff(item._id, item.staff?.access === 'A')}
+                                                style={{ marginRight: 8, padding: 6, borderRadius: 8, backgroundColor: colorScheme === 'light' ? '#e0e7ff' : '#333' }}
+                                            >
+                                                <Ionicons name="create-outline" size={16} color={colors.tint} />
+                                            </TouchableOpacity>
+                                        )}
+
+                                        {item.staff?.access === 'N' ? (
+                                            <></>
+                                        ) : (
+                                            <TouchableOpacity
+                                                onPress={() => handleDeleteStaff(item._id, item.name || 'this staff member')}
+                                                disabled={deletingStaffId === item._id}
+                                                style={[styles.deleteButton, { backgroundColor: deletingStaffId === item._id ? '#ccc' : '#ff4444' }]}
+                                            >
+                                                {deletingStaffId === item._id ? (
+                                                    <ActivityIndicator size="small" color="#fff" />
+                                                ) : (
+                                                    <Ionicons name="trash-outline" size={16} color="#fff" />
+                                                )}
+                                            </TouchableOpacity>
+                                        )}
                                     </View>
+                                    {editingStaffId === item._id && (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+                                            <Text style={{ color: colors.text, fontSize: 15, marginRight: 10 }}>TopUp Access:</Text>
+                                            <TouchableOpacity
+                                                style={[styles.checkbox, { borderColor: editTopupAccess ? colors.tint : colorScheme === 'light' ? '#ccc' : '#555', marginRight: 10 }]}
+                                                onPress={() => setEditTopupAccess(!editTopupAccess)}
+                                                disabled={editLoading}
+                                            >
+                                                {editTopupAccess && (
+                                                    <Ionicons name="checkmark" size={16} color={colors.tint} />
+                                                )}
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                onPress={() => handleSaveEdit(item._id)}
+                                                style={{ backgroundColor: colors.tint, borderRadius: 8, paddingVertical: 6, paddingHorizontal: 16, marginRight: 8 }}
+                                                disabled={editLoading}
+                                            >
+                                                {editLoading ? (
+                                                    <ActivityIndicator size="small" color="#fff" />
+                                                ) : (
+                                                    <Text style={{ color: colorScheme === 'dark' ? '#18181b' : '#fff', fontWeight: 'bold' }}>Save</Text>
+                                                )}
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                onPress={handleCancelEdit}
+                                                style={{ backgroundColor: '#aaa', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 16 }}
+                                                disabled={editLoading}
+                                            >
+                                                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Cancel</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    )}
                                     {item.phone && (
                                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
                                             <Ionicons name="call-outline" size={14} color={colorScheme === 'light' ? '#666' : '#aaa'} style={{ marginRight: 6 }} />

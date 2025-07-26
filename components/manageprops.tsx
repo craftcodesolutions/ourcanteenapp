@@ -49,6 +49,14 @@ export default function ManageProps() {
             href: '/staffs' as any,
             color: '#4CFFF0',
             requiredAccess: 'owner' // Available only to owners
+        },
+        {
+            id: 'accounts',
+            title: 'Accounts',
+            icon: 'cash-outline' as const,
+            href: '/kalakarttood' as any,
+            color: '#4CFFF0',
+            requiredAccess: 'admin' // Available only to owners
         }
     ];
 

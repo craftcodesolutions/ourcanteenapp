@@ -39,6 +39,7 @@ interface ClassifiedOrderStats {
   totalOrders: number;
   pendingOrders: number;
   successOrders: number;
+  cancelledOrders: number;
 }
 
 interface ClassifiedOrderGroup {
@@ -193,6 +194,10 @@ const OrdersPage = () => {
                   <View style={{ flex: 1, backgroundColor: colorScheme === 'light' ? '#e6ffed' : '#1e3a1e', borderRadius: 10, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' }}>
                     <Text style={{ color: statusColor, fontSize: 13, fontWeight: '600' }}>Success</Text>
                     <Text style={{ color: statusColor, fontSize: 18, fontWeight: 'bold', marginTop: 2 }}>{group.stats.successOrders}</Text>
+                  </View>
+                  <View style={{ flex: 1, backgroundColor: colorScheme === 'light' ? '#ffe6e6' : '#3a1e1e', borderRadius: 10, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ color: '#b71c1c', fontSize: 13, fontWeight: '600' }}>Cancelled</Text>
+                    <Text style={{ color: '#b71c1c', fontSize: 18, fontWeight: 'bold', marginTop: 2 }}>{group.stats.cancelledOrders}</Text>
                   </View>
                 </View>
               </TouchableOpacity>

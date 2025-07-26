@@ -39,7 +39,7 @@ export default function TopupsPage() {
 
     // Form state
     const [key, setKey] = useState(scannerUserId || '');
-    const [type, setType] = useState(scannerType || 'userId');
+    const [type, setType] = useState(scannerType || '');
     const [amount, setAmount] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -95,7 +95,7 @@ export default function TopupsPage() {
             setError('All fields are required.');
             return;
         }
-        
+
         // Phone number validation (same as signup page)
         if (type === 'phoneNumber') {
             const serializedPhone = serializePhoneNumber(key);
@@ -107,7 +107,7 @@ export default function TopupsPage() {
                 return;
             }
         }
-        
+
         if (isNaN(Number(amount)) || Number(amount) <= 0) {
             setError('Amount must be a positive number.');
             return;
@@ -128,7 +128,16 @@ export default function TopupsPage() {
             if (data.success) {
                 setDays(data.days || []);
                 setSuccess(true);
+                // Reset form to initial state
+                setKey('');
+                setType('');
                 setAmount('');
+                setError(null);
+
+                if (scannerType) {
+                    router.replace('/topups');
+                }
+
             } else {
                 setError(data.error || 'Topup failed.');
             }
@@ -174,57 +183,81 @@ export default function TopupsPage() {
                     <Ionicons name="arrow-back" size={24} color={colors.tint} />
                 </TouchableOpacity>
                 <Text style={[styles.pageTitle, { color: colors.text }]}>Topups by Day</Text>
+                <TouchableOpacity
+                    onPress={() => router.push('/scannertaka')}
+                    style={{ marginLeft: 'auto', backgroundColor: colorScheme === 'light' ? '#f3e8ff' : '#2a223a', borderRadius: 12, padding: 8 }}
+                >
+                    <Ionicons name="qr-code" size={24} color={colors.tint} />
+                </TouchableOpacity>
             </View>
             <View style={[styles.divider, { backgroundColor: colorScheme === 'light' ? '#ececec' : '#232323', marginBottom: 2 }]} />
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
                 {/* Topup Form - card style */}
                 <View style={[styles.card, { backgroundColor: colorScheme === 'light' ? '#fff' : '#232323', borderRadius: 16, shadowColor: colorScheme === 'light' ? '#000' : '#000', shadowOpacity: 0.07, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 2, padding: 20, marginTop: 10, marginBottom: 24, width: '92%', alignSelf: 'center' }]}>
                     <Text style={[styles.title, { color: colors.text, fontSize: 20, marginBottom: 10, textAlign: 'center', fontWeight: '800' }]}>Make a Topup</Text>
-                    <Text style={[styles.label, { color: colors.text }]}>Type</Text>
-                    <View style={styles.pickerRow}>
-                        {typeOptions.map(opt => (
-                            <TouchableOpacity
-                                key={opt.value}
-                                style={[styles.pickerOption, { borderColor: type === opt.value ? colors.tint : '#e0e0e0', backgroundColor: type === opt.value ? (colorScheme === 'light' ? '#f3e8ff' : '#2a223a') : 'transparent' }]}
-                                onPress={() => {
-                                    setType(opt.value);
-                                    // Clear value when type changes, but pre-fill with "880" for phone number
-                                    if (opt.value === 'phoneNumber') {
-                                        setKey('880');
+
+                    {/* Show type selection only if no user data from scanner */}
+                    {!isFromScanner && (
+                        <>
+                            <Text style={[styles.label, { color: colors.text }]}>Type</Text>
+                            <View style={styles.pickerRow}>
+                                {typeOptions.map(opt => (
+                                    <TouchableOpacity
+                                        key={opt.value}
+                                        style={[styles.pickerOption, { borderColor: type === opt.value ? colors.tint : '#e0e0e0', backgroundColor: type === opt.value ? (colorScheme === 'light' ? '#f3e8ff' : '#2a223a') : 'transparent' }]}
+                                        onPress={() => {
+                                            setType(opt.value);
+                                            // Clear value when type changes, but pre-fill with "880" for phone number
+                                            if (opt.value === 'phoneNumber') {
+                                                setKey('880');
+                                            } else {
+                                                setKey('');
+                                            }
+                                        }}
+                                    >
+                                        <Text style={{ color: type === opt.value ? colors.tint : colors.text, fontWeight: '700' }}>{opt.label}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        </>
+                    )}
+
+                    {/* Show user input field only if type is selected (and not from scanner) */}
+                    {type && !isFromScanner && (
+                        <>
+                            <Text style={[styles.label, { color: colors.text, marginTop: 10 }]}>User {type === 'userId' ? 'ID' : type === 'phoneNumber' ? 'Phone' : 'Email'}</Text>
+                            <TextInput
+                                style={[styles.input, { color: colors.text, backgroundColor: colorScheme === 'light' ? '#fafafa' : '#18181b' }]}
+                                placeholder={type === 'userId' ? 'Enter User ID' : type === 'phoneNumber' ? 'Enter Phone Number' : 'Enter Email'}
+                                placeholderTextColor={colorScheme === 'light' ? '#aaa' : '#888'}
+                                value={key}
+                                onChangeText={(value) => {
+                                    if (type === 'phoneNumber') {
+                                        setKey(serializePhoneNumber(value));
                                     } else {
-                                        setKey('');
+                                        setKey(value);
                                     }
                                 }}
-                            >
-                                <Text style={{ color: type === opt.value ? colors.tint : colors.text, fontWeight: '700' }}>{opt.label}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                    <Text style={[styles.label, { color: colors.text, marginTop: 10 }]}>User {type === 'userId' ? 'ID' : type === 'phoneNumber' ? 'Phone' : 'Email'}</Text>
-                    <TextInput
-                        style={[styles.input, { color: colors.text, backgroundColor: colorScheme === 'light' ? '#fafafa' : '#18181b' }]}
-                        placeholder={type === 'userId' ? 'Enter User ID' : type === 'phoneNumber' ? 'Enter Phone Number' : 'Enter Email'}
-                        placeholderTextColor={colorScheme === 'light' ? '#aaa' : '#888'}
-                        value={key}
-                        onChangeText={(value) => {
-                            if (type === 'phoneNumber') {
-                                setKey(serializePhoneNumber(value));
-                            } else {
-                                setKey(value);
-                            }
-                        }}
-                        autoCapitalize="none"
-                        keyboardType={type === 'phoneNumber' ? 'phone-pad' : 'default'}
-                    />
-                    <Text style={[styles.label, { color: colors.text, marginTop: 10 }]}>Amount</Text>
-                    <TextInput
-                        style={[styles.input, { color: colors.text, backgroundColor: colorScheme === 'light' ? '#fafafa' : '#18181b' }]}
-                        placeholder="Enter amount"
-                        placeholderTextColor={colorScheme === 'light' ? '#aaa' : '#888'}
-                        value={amount}
-                        onChangeText={setAmount}
-                        keyboardType="numeric"
-                    />
+                                autoCapitalize="none"
+                                keyboardType={type === 'phoneNumber' ? 'phone-pad' : 'default'}
+                            />
+                        </>
+                    )}
+
+                    {/* Show amount field if user input is provided OR if coming from scanner */}
+                    {((type && key) || isFromScanner) && (
+                        <>
+                            <Text style={[styles.label, { color: colors.text, marginTop: 10 }]}>Amount</Text>
+                            <TextInput
+                                style={[styles.input, { color: colors.text, backgroundColor: colorScheme === 'light' ? '#fafafa' : '#18181b' }]}
+                                placeholder="Enter amount"
+                                placeholderTextColor={colorScheme === 'light' ? '#aaa' : '#888'}
+                                value={amount}
+                                onChangeText={setAmount}
+                                keyboardType="numeric"
+                            />
+                        </>
+                    )}
                     {error && (
                         <View style={styles.errorBox}>
                             <Ionicons name="alert-circle" size={18} color="#d32f2f" style={{ marginRight: 6 }} />
@@ -234,22 +267,26 @@ export default function TopupsPage() {
                     {success && (
                         <Text style={{ color: '#388e3c', fontWeight: '700', marginTop: 10 }}>Topup successful!</Text>
                     )}
-                    <Animated.View style={{ transform: [{ scale: buttonAnim }] }}>
-                        <TouchableOpacity
-                            style={[styles.submitButton, { backgroundColor: colorScheme === 'dark' ? '#DC143C' : colors.tint }]}
-                            onPress={handleSubmit}
-                            onPressIn={handleButtonPressIn}
-                            onPressOut={handleButtonPressOut}
-                            disabled={loading}
-                            activeOpacity={0.85}
-                        >
-                            {loading ? (
-                                <ActivityIndicator color="#fff" />
-                            ) : (
-                                <Text style={styles.submitButtonText}>Top Up</Text>
-                            )}
-                        </TouchableOpacity>
-                    </Animated.View>
+
+                    {/* Show submit button only when all required fields are available */}
+                    {((type && key && amount) || (isFromScanner && scannerUserId && amount)) && (
+                        <Animated.View style={{ transform: [{ scale: buttonAnim }] }}>
+                            <TouchableOpacity
+                                style={[styles.submitButton, { backgroundColor: colorScheme === 'dark' ? '#DC143C' : colors.tint }]}
+                                onPress={handleSubmit}
+                                onPressIn={handleButtonPressIn}
+                                onPressOut={handleButtonPressOut}
+                                disabled={loading}
+                                activeOpacity={0.85}
+                            >
+                                {loading ? (
+                                    <ActivityIndicator color="#fff" />
+                                ) : (
+                                    <Text style={styles.submitButtonText}>Top Up</Text>
+                                )}
+                            </TouchableOpacity>
+                        </Animated.View>
+                    )}
                 </View>
                 {/* Topup History List - match adminorders.tsx card style */}
                 <View style={styles.topupsListWrapper}>

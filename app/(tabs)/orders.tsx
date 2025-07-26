@@ -33,6 +33,7 @@ const OrdersPage = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null); // <-- add
   const colorScheme = useColorScheme() ?? 'light';
   const cardBg = Colors[colorScheme].background;
   const textColor = Colors[colorScheme].text;
@@ -42,7 +43,9 @@ const OrdersPage = () => {
   const nameColor = colorScheme === 'light' ? '#222' : '#ececec';
   const priceColor = colorScheme === 'light' ? '#555' : '#bbb';
   const subtotalColor = colorScheme === 'light' ? '#888' : '#aaa';
-  const statusColor = colorScheme === 'light' ? '#DC143C' : '#fff';
+  const statusColor = colorScheme === 'light' ? '#DC143C' : '#DC143C';
+  // Add a green color for the Show QR button
+  const qrColor = colorScheme === 'light' ? '#1DB954' : '#4CAF50';
   const emptyIconColor = colorScheme === 'light' ? '#e0e0e0' : '#333';
   const emptyTextColor = colorScheme === 'light' ? '#888' : '#aaa';
   const router = useRouter();
@@ -61,7 +64,7 @@ const OrdersPage = () => {
     }
     setLoading(true);
     setError(null);
-    
+
     axios.get('https://ourcanteennbackend.vercel.app/api/user/order', {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -81,6 +84,34 @@ const OrdersPage = () => {
         }
       });
   }, [token, isAuthLoaded, logout, router]);
+
+  // Add cancel handler
+  const handleCancelOrder = async (orderId: string) => {
+    console.log(orderId)
+    setCancellingOrderId(orderId);
+    try {
+      const response = await axios.patch(
+        'https://ourcanteennbackend.vercel.app/api/user/order',
+        { orderId },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      setOrders(response.data.orders || []);
+    } catch (error: any) {
+
+      alert(
+        error.response?.data?.error ||
+        error.message ||
+        'Failed to cancel order'
+      );
+    } finally {
+      setCancellingOrderId(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -147,20 +178,35 @@ const OrdersPage = () => {
                 <Text style={[styles.total, { color: nameColor }]}>Total: ৳{order.total.toFixed(2)}</Text>
                 <Text style={[styles.collectionDate, { color: nameColor }]}>Collection: {`${new Date(order.collectionTime).getDate()} ${monthNames[new Date(order.collectionTime).getMonth()]} ${new Date(order.collectionTime).getFullYear()}`}</Text>
               </View>
-              {order.status !== 'SUCCESS' && (
+            </View>
+            {/* Action buttons in a single horizontal row, spaced between */}
+            {(order.status === 'PENDING' || order.status === 'SCANNED') && (
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
                 <TouchableOpacity
-                  style={{ marginLeft: 12, flexDirection: 'row', alignItems: 'center' }}
+                  style={{ flexDirection: 'row', alignItems: 'center', opacity: cancellingOrderId === order._id ? 0.5 : 1 }}
+                  onPress={() => handleCancelOrder(order._id)}
+                  disabled={cancellingOrderId === order._id}
+                >
+                  {cancellingOrderId === order._id ? (
+                    <ActivityIndicator size="small" color={statusColor} style={{ marginRight: 6 }} />
+                  ) : (
+                    <MaterialIcons name="cancel" size={28} color={statusColor} style={{ marginRight: 6 }} />
+                  )}
+                  <Text style={{ color: statusColor, fontWeight: 'bold' }}>Cancel Order</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center' }}
                   onPress={() => {
                     const data = { orderId: order._id, userId: order.userId };
                     const encodedData = encodeURIComponent(JSON.stringify(data));
                     router.push({ pathname: '/qr', params: { data: encodedData } });
                   }}
                 >
-                  <MaterialIcons name="qr-code" size={28} color={statusColor} style={{ marginRight: 6 }} />
-                  <Text style={{ color: statusColor, fontWeight: 'bold' }}>Show QR</Text>
+                  <MaterialIcons name="qr-code" size={28} color={qrColor} style={{ marginRight: 6 }} />
+                  <Text style={{ color: qrColor, fontWeight: 'bold' }}>Show QR</Text>
                 </TouchableOpacity>
-              )}
-            </View>
+              </View>
+            )}
 
 
           </View>

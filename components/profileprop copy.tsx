@@ -7,7 +7,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import axios from 'axios';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
 import React from "react";
 import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,14 +15,11 @@ const AVATAR_SIZE = 96;
 
 export default function ProfileProp() {
   const { user, logout, isAuthLoaded, updateProfile } = useAuth();
-  const { token } = useAuth();
   const colorScheme = useColorScheme() ?? 'light';
   const primary = Colors[colorScheme].tint;
   const cardBg = Colors[colorScheme].background;
   const textColor = Colors[colorScheme].text;
   const iconColor = Colors[colorScheme].icon;
-  const router = useRouter();
-
   // const heroBg = colorScheme === 'light' ? '#ffe6eb' : '#18181b';
   const cardOverlayBg = colorScheme === 'light' ? 'rgba(255,255,255,0.98)' : 'rgba(30,30,32,0.98)';
   const avatarBorder = colorScheme === 'light' ? '#fff' : '#232323';
@@ -50,11 +46,6 @@ export default function ProfileProp() {
     studentId: user?.studentId || '',
     phoneNumber: user?.phoneNumber || '',
   });
-
-  // Credit balance state
-  const [creditBalance, setCreditBalance] = React.useState<number | null>(null);
-  const [showCredit, setShowCredit] = React.useState(false);
-  const [creditLoading, setCreditLoading] = React.useState(false);
 
   // Fetch config on mount
   React.useEffect(() => {
@@ -88,37 +79,6 @@ export default function ProfileProp() {
   const getInstituteName = (instituteId: string | undefined) => {
     if (!instituteId) return '-';
     return config.institutes.find(inst => inst._id === instituteId)?.name || instituteId;
-  };
-
-  // Fetch credit balance function
-  const fetchCreditBalance = async () => {
-    if (!token) return;
-
-    setCreditLoading(true);
-    try {
-      const res = await axios.get('https://ourcanteennbackend.vercel.app/api/user/credit', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      const data = res.data;
-      setCreditBalance(data.credit);
-      setShowCredit(true);
-
-      // Hide credit balance after 3 seconds
-      setTimeout(() => {
-        setShowCredit(false);
-      }, 3000);
-
-    } catch (error: any) {
-      Alert.alert('Error', 'Failed to fetch credit balance. Please try again.');
-
-      if (error.response?.status === 403) {
-        logout();
-        router.push("/(auth)/signin");
-      }
-    } finally {
-      setCreditLoading(false);
-    }
   };
 
   // Handle profile update
@@ -171,102 +131,7 @@ export default function ProfileProp() {
           <View style={{ height: AVATAR_SIZE / 2 + 20 }} />
           <ThemedText type="title" style={[styles.heroName, { color: heroNameColor, marginTop: AVATAR_SIZE, fontSize: 26, fontWeight: '800' }]}>{user?.name || 'User'}</ThemedText>
           <ThemedText type="subtitle" style={[styles.heroSubtitle, { color: heroSubtitleColor, fontSize: 16 }]}>{user?.email}</ThemedText>
-
-
-
-          {/* Balance and Request Topup Buttons */}
-          <View style={{ marginTop: 20, marginHorizontal: 20, flexDirection: 'row', gap: 12 }}>
-            {/* Balance Button */}
-            <View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: '#d32f2f',
-              paddingHorizontal: 16,
-              paddingVertical: 10,
-              borderRadius: 12,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.15,
-              shadowRadius: 4,
-              elevation: 4,
-              borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.2)',
-              flex: 1,
-            }}>
-              {showCredit ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                  <Ionicons
-                    name="wallet-outline"
-                    size={16}
-                    color={'#fff'}
-                    style={{ marginRight: 8 }}
-                  />
-                  <ThemedText type="title" style={{ fontSize: 15, fontWeight: '900', color: '#fff' }}>
-                    ৳ {creditBalance || 0}
-                  </ThemedText>
-                </View>
-              ) : (
-                <TouchableOpacity
-                  onPress={fetchCreditBalance}
-                  disabled={creditLoading}
-                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}
-                >
-                  <Ionicons
-                    name="wallet-outline"
-                    size={16}
-                    color={'#fff'}
-                    style={{ marginRight: 8 }}
-                  />
-                  <ThemedText type="title" style={{ fontSize: 15, fontWeight: 'bold', color: '#fff', textAlign: 'center' }}>
-                    {!creditLoading && 'Balance'}
-                  </ThemedText>
-                  {creditLoading && (
-                    <ActivityIndicator size="small" color={'#fff'} />
-                  )}
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Request Topup Button */}
-            <TouchableOpacity
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: '#9C27B0',
-                paddingHorizontal: 16,
-                paddingVertical: 10,
-                borderRadius: 12,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.15,
-                shadowRadius: 4,
-                elevation: 4,
-                borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.2)',
-                flex: 1,
-              }}
-              onPress={() => {
-                const data = { userId: user?.id, topup: true };
-                const encodedData = encodeURIComponent(JSON.stringify(data));
-                router.push({ pathname: '/qrtaka', params: { data: encodedData } });
-              }}
-              activeOpacity={0.85}
-            >
-              <Ionicons
-                name="add-circle-outline"
-                size={16}
-                color={'#fff'}
-                style={{ marginRight: 8 }}
-              />
-              <ThemedText type="title" style={{ fontSize: 15, fontWeight: 'bold', color: '#fff', textAlign: 'center' }}>
-                Request Topup
-              </ThemedText>
-            </TouchableOpacity>
-          </View>
         </LinearGradient>
-
         {/* Card Overlay */}
         <ThemedView style={[styles.cardOverlay, { backgroundColor: cardOverlayBg, marginTop: AVATAR_SIZE / 2 - 60, padding: 32, shadowOpacity: 0.16, shadowRadius: 24, elevation: 10 }]}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -298,29 +163,20 @@ export default function ProfileProp() {
             <ThemedText style={[styles.infoLabel, { color: infoLabelColor, fontSize: 14 }]}>Student ID:</ThemedText>
             <ThemedText style={[styles.infoValue, { color: infoValueColor, fontSize: 14 }]}>{user?.studentId || '-'}</ThemedText>
           </View>
-
-
-          {/* Action Buttons */}
-          <View style={{ marginTop: 24, gap: 16 }}>
-
-
-            <TouchableOpacity
-              style={[styles.logoutBtn, {
-                backgroundColor: primary,
-                width: '100%',
-                shadowOpacity: 0.2,
-                shadowRadius: 12,
-                elevation: 8,
-                paddingVertical: 16,
-                borderRadius: 16,
-              }]}
-              onPress={logout}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="log-out-outline" size={22} color={buttonTextColor} style={{ marginRight: 12 }} />
-              <ThemedText style={{ color: buttonTextColor, fontWeight: '800', fontSize: 16 }}>Logout</ThemedText>
-            </TouchableOpacity>
+          <View style={styles.rowDivider} />
+          <View style={styles.infoRow}>
+            <Ionicons name="star-outline" size={20} color={iconColor} style={styles.icon} />
+            <ThemedText style={[styles.infoLabel, { color: infoLabelColor, fontSize: 14 }]}>Role:</ThemedText>
+            <ThemedText style={[styles.infoValue, { color: infoValueColor, fontSize: 14 }]}>{user?.isOwner ? 'Owner' : 'User'}</ThemedText>
           </View>
+          <TouchableOpacity
+            style={[styles.logoutBtn, { backgroundColor: primary, width: '100%', marginTop: 28, shadowOpacity: 0.18, shadowRadius: 12, elevation: 6 }]}
+            onPress={logout}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="log-out-outline" size={20} color={buttonTextColor} style={{ marginRight: 12 }} />
+            <ThemedText style={{ color: buttonTextColor, fontWeight: '800', fontSize: 16 }}>Logout</ThemedText>
+          </TouchableOpacity>
         </ThemedView>
       </ScrollView>
 
@@ -582,18 +438,6 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
     marginTop: 28,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 16,
-    paddingVertical: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 6,
   },
   // Modal styles
   modalOverlay: {
