@@ -163,6 +163,13 @@ export default function SigninScreen() {
                 <Text style={[styles.signupButtonText, { color: colorScheme === 'dark' ? '#2A2A2A' : '#F5F5F5' }]}>Sign In</Text>
               )}
             </TouchableOpacity>
+            {/* Forgot Password Link */}
+            <View style={styles.forgotPasswordContainer}>
+              <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')}>
+                <Text style={[styles.forgotPasswordLink, { color: colors.tint }]}>Forgot Password?</Text>
+              </TouchableOpacity>
+            </View>
+            
             {/* Signup Link */}
             <View style={styles.signinContainer}>
               <Text style={[styles.signinText, { color: colors.icon }]}>Don&apos;t have an account?{' '}</Text>
@@ -236,6 +243,15 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  forgotPasswordContainer: {
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  forgotPasswordLink: {
+    fontSize: 14,
+    fontWeight: '500',
+    textDecorationLine: 'underline',
   },
   signinContainer: {
     flexDirection: 'row',
