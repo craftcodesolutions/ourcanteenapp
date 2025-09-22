@@ -5,7 +5,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import axios from 'axios';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 interface OrderItem {
@@ -46,6 +46,7 @@ const OrdersByDatePage = () => {
   const [group, setGroup] = useState<ClassifiedOrderGroup | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const colorScheme = useColorScheme() ?? 'light';
   const cardBg = Colors[colorScheme].background;
   const textColor = Colors[colorScheme].text;
@@ -103,6 +104,49 @@ const OrdersByDatePage = () => {
         setLoading(false);
       });
   }, [token, isAuthLoaded, date, logout, router]);
+
+  // Handle cancel order
+  const handleCancelOrder = async (orderId: string, userId: string) => {
+    setCancellingOrderId(orderId);
+    try {
+      const response = await axios.patch(
+        'https://ourcanteennbackend.vercel.app/api/owner/cancel-order',
+        { orderId, userId },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      
+      // Refresh the orders
+      const refreshResponse = await axios.get('https://ourcanteennbackend.vercel.app/api/owner/orderclssified', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      
+      const data = refreshResponse.data;
+      setGroup(data && date && data[date] ? data[date] : null);
+      
+      // Show success message with refund info if applicable
+      const refunded = response.data.refunded || 0;
+      const message = refunded > 0 
+        ? `Order cancelled successfully. ৳${refunded.toFixed(2)} refunded to customer.`
+        : 'Order cancelled successfully.';
+      
+      alert(message);
+    } catch (error: any) {
+      alert(
+        error.response?.data?.error ||
+        error.message ||
+        'Failed to cancel order'
+      );
+    } finally {
+      setCancellingOrderId(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -190,6 +234,42 @@ const OrdersByDatePage = () => {
                 <Text style={[styles.collectionDate, { color: nameColor }]}>Collection: {`${new Date(order.collectionTime).getDate()} ${monthNames[new Date(order.collectionTime).getMonth()]} ${new Date(order.collectionTime).getFullYear()}`}</Text>
               </View>
               
+              {/* Cancel Button - Only show for non-cancelled and non-completed orders */}
+              {order.status !== 'CANCELLED' && order.status !== 'SUCCESS' && (
+                <TouchableOpacity
+                  style={[
+                    styles.cancelButton,
+                    {
+                      backgroundColor: '#ff4444',
+                      opacity: cancellingOrderId === order._id ? 0.7 : 1,
+                    },
+                  ]}
+                  onPress={() => {
+                    Alert.alert(
+                      'Cancel Order',
+                      'Are you sure you want to cancel this order? This action cannot be undone.',
+                      [
+                        { text: 'No', style: 'cancel' },
+                        { 
+                          text: 'Yes, Cancel', 
+                          style: 'destructive',
+                          onPress: () => handleCancelOrder(order._id, order.userId)
+                        },
+                      ]
+                    );
+                  }}
+                  disabled={cancellingOrderId === order._id}
+                >
+                  {cancellingOrderId === order._id ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <MaterialIcons name="cancel" size={18} color="#fff" />
+                      <Text style={styles.cancelButtonText}>Cancel</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         )}
@@ -302,6 +382,24 @@ const styles = StyleSheet.create({
   total: {
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  cancelButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ff4444',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    elevation: 2,
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  cancelButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
   },
 });
 
