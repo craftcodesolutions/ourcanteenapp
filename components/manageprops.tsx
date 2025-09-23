@@ -57,6 +57,14 @@ export default function ManageProps() {
             href: '/kalakarttood' as any,
             color: '#4CFFF0',
             requiredAccess: 'admin' // Available only to owners
+        },
+        {
+            id: 'loans',
+            title: 'Loans',
+            icon: 'card-outline' as const,
+            href: '/loans' as any,
+            color: '#9C27B0',
+            requiredAccess: 'admin' // Available to admin staff and owners
         }
     ];
 

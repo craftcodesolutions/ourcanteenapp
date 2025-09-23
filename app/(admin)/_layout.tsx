@@ -190,13 +190,6 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <MaterialIcons name="dns" size={18} color={color} />,
         }}
       />
-      {/* <Tabs.Screen
-        name="scanner"
-        options={{
-          title: 'Scanner',
-          tabBarIcon: ({ color }) => <MaterialIcons name="qr-code-scanner" size={18} color={color} />,
-        }}
-      /> */}
       <Tabs.Screen
         name="account"
         options={{

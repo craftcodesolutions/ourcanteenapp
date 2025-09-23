@@ -26,6 +26,13 @@ interface Order {
   collectionTime: string;
   createdAt: string;
   updatedAt: string;
+  loanApproved?: boolean;
+  userInfo?: {
+    name: string;
+    email: string;
+    phoneNumber: string;
+    studentId: string;
+  };
 }
 
 interface ClassifiedOrderStats {
@@ -213,6 +220,29 @@ const OrdersByDatePage = () => {
               <Text style={[styles.status, { color: statusColor }]}>{order.status}</Text>
             </View>
             <Text style={[styles.orderDate, { color: subtotalColor }]}>Placed: {new Date(order.createdAt).toLocaleString()}</Text>
+            
+            {/* Customer Information */}
+            {order.userInfo && (
+              <View style={[styles.customerInfo, { backgroundColor: colorScheme === 'light' ? '#f8f9fa' : '#1a1a1a', borderColor: colorScheme === 'light' ? '#e9ecef' : '#333' }]}>
+                <View style={styles.customerRow}>
+                  <MaterialIcons name="person" size={16} color={priceColor} style={{ marginRight: 8 }} />
+                  <Text style={[styles.customerLabel, { color: subtotalColor }]}>Customer:</Text>
+                  <Text style={[styles.customerValue, { color: nameColor }]}>{order.userInfo.name || 'N/A'}</Text>
+                </View>
+                <View style={styles.customerRow}>
+                  <MaterialIcons name="phone" size={16} color={priceColor} style={{ marginRight: 8 }} />
+                  <Text style={[styles.customerLabel, { color: subtotalColor }]}>Phone:</Text>
+                  <Text style={[styles.customerValue, { color: nameColor }]}>{order.userInfo.phoneNumber || 'N/A'}</Text>
+                </View>
+                {order.userInfo.studentId && (
+                  <View style={styles.customerRow}>
+                    <MaterialIcons name="badge" size={16} color={priceColor} style={{ marginRight: 8 }} />
+                    <Text style={[styles.customerLabel, { color: subtotalColor }]}>Student ID:</Text>
+                    <Text style={[styles.customerValue, { color: nameColor }]}>{order.userInfo.studentId}</Text>
+                  </View>
+                )}
+              </View>
+            )}
             <FlatList
               data={order.items}
               keyExtractor={(item) => item._id}
@@ -231,7 +261,19 @@ const OrdersByDatePage = () => {
             <View style={[styles.orderFooter, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}> 
               <View>
                 <Text style={[styles.total, { color: nameColor }]}>Total: ৳{order.total.toFixed(2)}</Text>
-                <Text style={[styles.collectionDate, { color: nameColor }]}>Collection: {`${new Date(order.collectionTime).getDate()} ${monthNames[new Date(order.collectionTime).getMonth()]} ${new Date(order.collectionTime).getFullYear()}`}</Text>
+                {order.loanApproved && (
+                  <Text style={[styles.loanIndicator, { color: '#ff6b35' }]}>💳 Paid via Loan</Text>
+                )}
+                <Text style={[styles.collectionDate, { color: nameColor }]}>
+                  Collection: {new Date(order.collectionTime).toLocaleString([], { 
+                    weekday: 'short',
+                    month: 'short', 
+                    day: 'numeric', 
+                    year: 'numeric',
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                  })}
+                </Text>
               </View>
               
               {/* Cancel Button - Only show for non-cancelled and non-completed orders */}
@@ -400,6 +442,34 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginLeft: 4,
+  },
+  customerInfo: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  customerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  customerLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginRight: 8,
+    minWidth: 70,
+  },
+  customerValue: {
+    fontSize: 13,
+    flex: 1,
+  },
+  loanIndicator: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 4,
   },
 });
 

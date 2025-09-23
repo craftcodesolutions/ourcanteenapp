@@ -177,6 +177,30 @@ export default function RestaurantScreen() {
     setCustomCuisines(prev => prev.filter((_, i) => i !== index));
   };
 
+  // Penalty settings functions
+  const savePenaltySettings = async () => {
+    setSavingPenalty(true);
+    try {
+      await axios.put('https://ourcanteennbackend.vercel.app/api/owner/penalty-settings', penaltySettings, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      setPenaltyModalVisible(false);
+      alert('Penalty settings updated successfully');
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        logout();
+        router.replace("/(auth)/signin");
+      } else {
+        alert(error.response?.data?.error || 'Failed to update penalty settings');
+      }
+    } finally {
+      setSavingPenalty(false);
+    }
+  };
+
 
   const [modalVisible, setModalVisible] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -204,6 +228,14 @@ export default function RestaurantScreen() {
   // Cuisine selection modal state
   const [cuisineModalVisible, setCuisineModalVisible] = useState(false);
   const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
+  const [penaltySettings, setPenaltySettings] = useState({
+    enabled: true,
+    penaltyRate: 10,
+    timeThreshold: 6,
+    allowNegativeBalance: true
+  });
+  const [penaltyModalVisible, setPenaltyModalVisible] = useState(false);
+  const [savingPenalty, setSavingPenalty] = useState(false);
   const [customCuisines, setCustomCuisines] = useState<string[]>([]);
   const [newCustomCuisine, setNewCustomCuisine] = useState('');
   const [savingCuisines, setSavingCuisines] = useState(false);
@@ -375,12 +407,19 @@ export default function RestaurantScreen() {
         // Wait for config to load first and get the config data
         const configData = await fetchConfig();
         
-        // Now fetch restaurant data
-        const res = await axios.get('https://ourcanteennbackend.vercel.app/api/owner/myres', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          }
-        });
+        // Now fetch restaurant data and penalty settings
+        const [res, penaltyRes] = await Promise.all([
+          axios.get('https://ourcanteennbackend.vercel.app/api/owner/myres', {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            }
+          }),
+          axios.get('https://ourcanteennbackend.vercel.app/api/owner/penalty-settings', {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            }
+          }).catch(() => null) // Don't fail if penalty settings don't exist yet
+        ]);
 
         if (isMounted) {
           console.log(res.data);
@@ -392,6 +431,11 @@ export default function RestaurantScreen() {
               return configCuisine || { _id: id, name: 'Unknown Cuisine' };
             });
             setCuisine(cuisineObjects);
+          }
+
+          // Set penalty settings
+          if (penaltyRes?.data?.penaltySettings) {
+            setPenaltySettings(penaltyRes.data.penaltySettings);
           }
 
           setRestaurant(res.data);
@@ -516,6 +560,46 @@ export default function RestaurantScreen() {
                     </View>
                   );
                 })}
+              </View>
+
+              {/* Penalty Settings Section */}
+              <View style={{ flex: 1, backgroundColor: cardBg, padding: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, justifyContent: 'space-between' }}>
+                  <ThemedText type="subtitle" style={[styles.sectionTitle, { marginBottom: 0 }]}>Penalty Settings</ThemedText>
+                  <TouchableOpacity onPress={() => setPenaltyModalVisible(true)} activeOpacity={0.7}>
+                    <Ionicons name="settings-outline" size={18} color={primary} style={{ padding: 2, borderRadius: 6, backgroundColor: 'transparent', opacity: 0.7 }} />
+                  </TouchableOpacity>
+                </View>
+                <View style={{ marginTop: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                    <Ionicons name={penaltySettings.enabled ? "checkmark-circle" : "close-circle"} size={18} color={penaltySettings.enabled ? "#4CAF50" : "#f44336"} style={{ marginRight: 8 }} />
+                    <ThemedText style={{ fontSize: 14, fontWeight: '600' }}>
+                      Status: {penaltySettings.enabled ? 'Enabled' : 'Disabled'}
+                    </ThemedText>
+                  </View>
+                  {penaltySettings.enabled && (
+                    <>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                        <Ionicons name="time-outline" size={16} color={primary} style={{ marginRight: 8 }} />
+                        <ThemedText style={{ fontSize: 14 }}>
+                          Time Threshold: {penaltySettings.timeThreshold} hours
+                        </ThemedText>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                        <Ionicons name="cash-outline" size={16} color={primary} style={{ marginRight: 8 }} />
+                        <ThemedText style={{ fontSize: 14 }}>
+                          Penalty Rate: {penaltySettings.penaltyRate}%
+                        </ThemedText>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                        <Ionicons name={penaltySettings.allowNegativeBalance ? "card-outline" : "card"} size={16} color={primary} style={{ marginRight: 8 }} />
+                        <ThemedText style={{ fontSize: 14 }}>
+                          Negative Balance: {penaltySettings.allowNegativeBalance ? 'Allowed' : 'Not Allowed'}
+                        </ThemedText>
+                      </View>
+                    </>
+                  )}
+                </View>
               </View>
 
               <View style={{ justifyContent: 'center', alignItems: 'center', marginVertical: 5 }}>
@@ -1344,6 +1428,273 @@ export default function RestaurantScreen() {
                       fontSize: 16
                     }}>
                       Save ({selectedCuisines.length + customCuisines.length})
+                    </ThemedText>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Penalty Settings Modal */}
+        <Modal
+          visible={penaltyModalVisible}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setPenaltyModalVisible(false)}
+        >
+          <View style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20
+          }}>
+            <View style={{
+              width: '100%',
+              maxWidth: 400,
+              height: '90%',
+              backgroundColor: cardBg,
+              borderRadius: 16,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.25,
+              shadowRadius: 12,
+              elevation: 8,
+              display: 'flex',
+              flexDirection: 'column'
+            }}>
+              {/* Header */}
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingHorizontal: 20,
+                paddingVertical: 18,
+                borderBottomWidth: 1,
+                borderBottomColor: colorScheme === 'light' ? '#eee' : '#222',
+                backgroundColor: cardBg,
+                borderTopLeftRadius: 16,
+                borderTopRightRadius: 16
+              }}>
+                <ThemedText type="title" style={{
+                  fontSize: 20,
+                  fontWeight: '700',
+                  color: textColor,
+                  flex: 1,
+                  textAlign: 'center'
+                }}>
+                  Penalty Settings
+                </ThemedText>
+                <TouchableOpacity
+                  onPress={() => setPenaltyModalVisible(false)}
+                  style={{
+                    padding: 4,
+                    borderRadius: 16,
+                    backgroundColor: colorScheme === 'light' ? '#f3f3f3' : '#232323'
+                  }}
+                >
+                  <Ionicons name="close" size={20} color={iconColor} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Content */}
+              <ScrollView
+                style={{ flex: 1, backgroundColor: cardBg }}
+                contentContainerStyle={{ 
+                  paddingHorizontal: 20, 
+                  paddingTop: 18, 
+                  paddingBottom: 20,
+                  flexGrow: 1 
+                }}
+                showsVerticalScrollIndicator={true}
+                keyboardShouldPersistTaps="handled"
+                bounces={false}
+              >
+                {/* Enable/Disable Penalty */}
+                <View style={{ marginBottom: 24, backgroundColor: colorScheme === 'light' ? '#f8f9fa' : '#1a1a1a', borderRadius: 8, padding: 16 }}>
+                  <ThemedText style={{ fontSize: 16, fontWeight: '600', marginBottom: 12, color: textColor }}>
+                    Penalty System
+                  </ThemedText>
+                  <TouchableOpacity
+                    onPress={() => setPenaltySettings(prev => ({ ...prev, enabled: !prev.enabled }))}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 12,
+                      paddingHorizontal: 16,
+                      borderRadius: 8,
+                      backgroundColor: colorScheme === 'light' ? '#f8f9fa' : '#232323',
+                      borderWidth: 1,
+                      borderColor: penaltySettings.enabled ? primary : (colorScheme === 'light' ? '#e0e0e0' : '#333')
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons 
+                      name={penaltySettings.enabled ? "checkmark-circle" : "ellipse-outline"} 
+                      size={24} 
+                      color={penaltySettings.enabled ? "#4CAF50" : (colorScheme === 'light' ? '#ccc' : '#555')} 
+                      style={{ marginRight: 12 }} 
+                    />
+                    <ThemedText style={{ fontSize: 16, color: textColor }}>
+                      {penaltySettings.enabled ? 'Enabled' : 'Disabled'}
+                    </ThemedText>
+                  </TouchableOpacity>
+                </View>
+
+                {penaltySettings.enabled && (
+                  <>
+                    {/* Penalty Rate */}
+                    <View style={{ marginBottom: 24, backgroundColor: colorScheme === 'light' ? '#f0f8ff' : '#1a2332', borderRadius: 8, padding: 16 }}>
+                      <ThemedText style={{ fontSize: 16, fontWeight: '600', marginBottom: 8, color: textColor }}>
+                        Penalty Rate (%)
+                      </ThemedText>
+                      <ThemedText style={{ fontSize: 14, color: iconColor, marginBottom: 12 }}>
+                        Percentage of order total to charge as penalty
+                      </ThemedText>
+                      <TextInput
+                        value={penaltySettings.penaltyRate.toString()}
+                        onChangeText={(text) => {
+                          const value = parseFloat(text) || 0;
+                          setPenaltySettings(prev => ({ ...prev, penaltyRate: Math.min(100, Math.max(0, value)) }));
+                        }}
+                        placeholder="10"
+                        placeholderTextColor={colorScheme === 'light' ? '#aaa' : '#666'}
+                        style={{
+                          borderWidth: 1,
+                          borderColor: colorScheme === 'light' ? '#e0e0e0' : '#333',
+                          borderRadius: 8,
+                          padding: 12,
+                          color: textColor,
+                          fontSize: 16,
+                          backgroundColor: colorScheme === 'light' ? '#fafbfc' : '#232323'
+                        }}
+                        keyboardType="numeric"
+                      />
+                    </View>
+
+                    {/* Time Threshold */}
+                    <View style={{ marginBottom: 24, backgroundColor: colorScheme === 'light' ? '#fff8f0' : '#2d1f0a', borderRadius: 8, padding: 16 }}>
+                      <ThemedText style={{ fontSize: 16, fontWeight: '600', marginBottom: 8, color: textColor }}>
+                        Time Threshold (Hours)
+                      </ThemedText>
+                      <ThemedText style={{ fontSize: 14, color: iconColor, marginBottom: 12 }}>
+                        Orders cancelled within this time will incur penalty
+                      </ThemedText>
+                      <TextInput
+                        value={penaltySettings.timeThreshold.toString()}
+                        onChangeText={(text) => {
+                          const value = parseFloat(text) || 0;
+                          setPenaltySettings(prev => ({ ...prev, timeThreshold: Math.min(48, Math.max(0, value)) }));
+                        }}
+                        placeholder="6"
+                        placeholderTextColor={colorScheme === 'light' ? '#aaa' : '#666'}
+                        style={{
+                          borderWidth: 1,
+                          borderColor: colorScheme === 'light' ? '#e0e0e0' : '#333',
+                          borderRadius: 8,
+                          padding: 12,
+                          color: textColor,
+                          fontSize: 16,
+                          backgroundColor: colorScheme === 'light' ? '#fafbfc' : '#232323'
+                        }}
+                        keyboardType="numeric"
+                      />
+                    </View>
+
+                    {/* Allow Negative Balance */}
+                    <View style={{ marginBottom: 24, backgroundColor: colorScheme === 'light' ? '#f0fff4' : '#0a2d0f', borderRadius: 8, padding: 16 }}>
+                      <ThemedText style={{ fontSize: 16, fontWeight: '600', marginBottom: 12, color: textColor }}>
+                        Negative Balance
+                      </ThemedText>
+                      <TouchableOpacity
+                        onPress={() => setPenaltySettings(prev => ({ ...prev, allowNegativeBalance: !prev.allowNegativeBalance }))}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          paddingVertical: 12,
+                          paddingHorizontal: 16,
+                          borderRadius: 8,
+                          backgroundColor: colorScheme === 'light' ? '#f8f9fa' : '#232323',
+                          borderWidth: 1,
+                          borderColor: penaltySettings.allowNegativeBalance ? primary : (colorScheme === 'light' ? '#e0e0e0' : '#333')
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons 
+                          name={penaltySettings.allowNegativeBalance ? "checkmark-circle" : "ellipse-outline"} 
+                          size={24} 
+                          color={penaltySettings.allowNegativeBalance ? "#4CAF50" : (colorScheme === 'light' ? '#ccc' : '#555')} 
+                          style={{ marginRight: 12 }} 
+                        />
+                        <View style={{ flex: 1 }}>
+                          <ThemedText style={{ fontSize: 16, color: textColor, marginBottom: 2 }}>
+                            {penaltySettings.allowNegativeBalance ? 'Allow Negative Balance' : 'Prevent Negative Balance'}
+                          </ThemedText>
+                          <ThemedText style={{ fontSize: 13, color: iconColor }}>
+                            {penaltySettings.allowNegativeBalance 
+                              ? 'Users can go negative when penalty exceeds credit'
+                              : 'Penalty limited to available credit only'
+                            }
+                          </ThemedText>
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
+              </ScrollView>
+
+              {/* Footer */}
+              <View style={{
+                flexDirection: 'row',
+                justifyContent: 'flex-end',
+                gap: 10,
+                paddingHorizontal: 20,
+                paddingVertical: 18,
+                borderTopWidth: 1,
+                borderTopColor: colorScheme === 'light' ? '#eee' : '#222',
+                backgroundColor: cardBg,
+                borderBottomLeftRadius: 16,
+                borderBottomRightRadius: 16
+              }}>
+                <TouchableOpacity
+                  onPress={() => setPenaltyModalVisible(false)}
+                  style={{
+                    backgroundColor: colorScheme === 'light' ? '#f3f3f3' : '#232323',
+                    borderRadius: 8,
+                    paddingVertical: 10,
+                    paddingHorizontal: 22,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1,
+                    borderColor: colorScheme === 'light' ? '#e0e0e0' : '#333'
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <ThemedText style={{ color: iconColor, fontWeight: '600', fontSize: 16 }}>
+                    Cancel
+                  </ThemedText>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={savePenaltySettings}
+                  style={{
+                    backgroundColor: primary,
+                    borderRadius: 8,
+                    paddingVertical: 10,
+                    paddingHorizontal: 22,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: savingPenalty ? 0.7 : 1
+                  }}
+                  activeOpacity={0.7}
+                  disabled={savingPenalty}
+                >
+                  {savingPenalty ? (
+                    <ActivityIndicator size="small" color={colorScheme === 'light' ? '#fff' : '#18181b'} />
+                  ) : (
+                    <ThemedText style={{ color: colorScheme === 'light' ? '#fff' : '#18181b', fontWeight: '600', fontSize: 16 }}>
+                      Save
                     </ThemedText>
                   )}
                 </TouchableOpacity>

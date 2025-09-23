@@ -22,8 +22,84 @@ export default function ScannerScreen() {
   const [successModalVisible, setSuccessModalVisible] = useState(false);
   const [successLoading, setSuccessLoading] = useState(false);
   const [insufficientModalVisible, setInsufficientModalVisible] = useState(false);
+  const [loanLoading, setLoanLoading] = useState(false);
+  const [loanAmount, setLoanAmount] = useState<number>(0);
+  const [orderTotal, setOrderTotal] = useState<number>(0);
+  const [customerBalance, setCustomerBalance] = useState<number>(0);
 
   const isPermissionGranted = Boolean(permission?.granted);
+
+  const fetchOrderForLoan = async (orderId: string, userId: string) => {
+    try {
+      // We'll make a simple GET request to fetch order details
+      // Since there's no direct GET order endpoint, we'll use a workaround
+      // by making another POST request that will return the order details
+      const response = await axios.post(
+        'https://ourcanteennbackend.vercel.app/api/owner/orderstatus',
+        { orderId, userId },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+      
+      if (response.data.success && response.data.order) {
+        setLoanAmount(response.data.order.total);
+        setOrderTotal(response.data.order.total);
+      }
+    } catch (err: any) {
+      console.log('Failed to fetch order for loan:', err);
+    }
+  };
+
+  const handleLoanApproval = async () => {
+    if (!qrOrderId || !qrUserId || !loanAmount) return;
+    
+    setLoanLoading(true);
+    try {
+      const response = await axios.post(
+        'https://ourcanteennbackend.vercel.app/api/owner/approve-loan',
+        { 
+          orderId: qrOrderId, 
+          userId: qrUserId,
+          loanAmount: loanAmount
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.data.success) {
+        setInsufficientModalVisible(false);
+        // If order is already SUCCESS, show success modal instead
+        if (response.data.order.status === 'SUCCESS') {
+          setSuccessModalVisible(true);
+        } else {
+          setOrderInfo(response.data.order);
+          setModalVisible(true);
+        }
+        // Reset loan amount
+        setLoanAmount(0);
+        setOrderTotal(0);
+        setCustomerBalance(0);
+        console.log('Loan approved successfully:', response.data);
+      }
+    } catch (err: any) {
+      if (err.response?.status === 403) {
+        logout();
+        router.push("/(auth)/signin");
+      } else {
+        setError(err?.response?.data?.error || 'Failed to approve loan');
+        setInsufficientModalVisible(false);
+      }
+    }
+    setLoanLoading(false);
+  };
 
   const sendOrderStatus = async (orderId: string, userId: string) => {
     setLoading(true);
@@ -57,6 +133,19 @@ export default function ScannerScreen() {
         router.push("/(auth)/signin");
       } else if (err.response && err.response.status === 406) {
         setInsufficientModalVisible(true);
+        // Check if order details are included in the 406 response
+        if (err.response.data && err.response.data.order) {
+          setLoanAmount(err.response.data.order.total);
+          setOrderTotal(err.response.data.order.total);
+          // Set customer balance if available
+          if (err.response.data.customer && err.response.data.customer.credit !== undefined) {
+            setCustomerBalance(err.response.data.customer.credit);
+          }
+          console.log('Got order details from 406 response:', err.response.data.order);
+        } else {
+          // Fallback: fetch order details to get the total for loan amount
+          fetchOrderForLoan(orderId, userId);
+        }
       } else if (err.response && err.response.data && err.response.data.error) {
         setError(err.response.data.error);
       } else {
@@ -198,6 +287,12 @@ export default function ScannerScreen() {
                     <Text style={{ color: '#222', fontWeight: 'bold', fontSize: 16 }}>Total</Text>
                     <Text style={{ color: '#388e3c', fontWeight: 'bold', fontSize: 17 }}>৳{orderInfo.total}</Text>
                   </View>
+                  {orderInfo.loanApproved && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <Text style={{ color: '#ff6b35', fontWeight: 'bold', fontSize: 14 }}>Paid via Loan</Text>
+                      <Text style={{ color: '#ff6b35', fontWeight: 'bold', fontSize: 15 }}>৳{orderInfo.loanAmount || orderInfo.total}</Text>
+                    </View>
+                  )}
                   <Text style={{ color: '#aaa', fontSize: 12, textAlign: 'right', marginBottom: 4 }}>Created: {new Date(orderInfo.createdAt).toLocaleString()}</Text>
                 </ScrollView>
                 <View style={{ flexDirection: 'row' }}>
@@ -254,8 +349,8 @@ export default function ScannerScreen() {
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' }}>
             <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 32, alignItems: 'center', width: '80%' }}>
               <Ionicons name="checkmark-circle" size={48} color="#388e3c" style={{ marginBottom: 12 }} />
-              <Text style={{ color: '#222', fontSize: 20, fontWeight: 'bold', marginBottom: 8 }}>Order Marked as Success!</Text>
-              <Text style={{ color: '#666', fontSize: 15, textAlign: 'center', marginBottom: 24 }}>The order status has been updated to SUCCESS.</Text>
+              <Text style={{ color: '#222', fontSize: 20, fontWeight: 'bold', marginBottom: 8 }}>Payment Completed!</Text>
+              <Text style={{ color: '#666', fontSize: 15, textAlign: 'center', marginBottom: 24 }}>Order has been paid via loan and marked as SUCCESS.</Text>
               <TouchableOpacity
                 style={{ backgroundColor: '#222', borderRadius: 8, paddingVertical: 12, paddingHorizontal: 32 }}
                 onPress={() => {
@@ -265,6 +360,8 @@ export default function ScannerScreen() {
                   setOrderInfo(null);
                   setQrOrderId(null);
                   setQrUserId(null);
+                  setLoanAmount(0);
+                  setCustomerBalance(0);
                 }}
               >
                 <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Close</Text>
@@ -279,33 +376,124 @@ export default function ScannerScreen() {
           transparent={true}
           onRequestClose={() => setInsufficientModalVisible(false)}
         >
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' }}>
-            <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 32, alignItems: 'center', width: '80%' }}>
-              <Ionicons name="alert-circle" size={48} color="#b71c1c" style={{ marginBottom: 12 }} />
-              <Text style={{ color: '#b71c1c', fontSize: 20, fontWeight: 'bold', marginBottom: 8 }}>Insufficient Balance</Text>
-              <Text style={{ color: '#666', fontSize: 15, textAlign: 'center', marginBottom: 24 }}>The user does not have enough balance to complete this order.</Text>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 24, alignItems: 'center', width: '85%', maxWidth: 400 }}>
+              <Ionicons name="alert-circle" size={48} color="#ff6b35" style={{ marginBottom: 16 }} />
+              <Text style={{ color: '#b71c1c', fontSize: 20, fontWeight: 'bold', marginBottom: 8, textAlign: 'center' }}>Insufficient Balance</Text>
+              
+              {/* Order Information */}
+              {orderTotal > 0 && (
+                <View style={{ backgroundColor: '#f8f9fa', borderRadius: 8, padding: 16, marginBottom: 20, width: '100%' }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <Text style={{ color: '#555', fontSize: 14, fontWeight: '600' }}>Current Balance:</Text>
+                    <Text style={{ color: customerBalance < 0 ? '#d32f2f' : '#666', fontSize: 16, fontWeight: 'bold' }}>৳{customerBalance.toFixed(2)}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <Text style={{ color: '#555', fontSize: 14, fontWeight: '600' }}>Order Total:</Text>
+                    <Text style={{ color: '#222', fontSize: 18, fontWeight: 'bold' }}>৳{orderTotal.toFixed(2)}</Text>
+                  </View>
+                  <View style={{ height: 1, backgroundColor: '#e0e0e0', marginVertical: 8 }} />
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <Text style={{ color: '#d32f2f', fontSize: 14, fontWeight: '600' }}>Shortage:</Text>
+                    <Text style={{ color: '#d32f2f', fontSize: 16, fontWeight: 'bold' }}>৳{Math.max(0, orderTotal - customerBalance).toFixed(2)}</Text>
+                  </View>
+                  <View style={{ height: 1, backgroundColor: '#e0e0e0', marginVertical: 8 }} />
+                  <Text style={{ color: '#666', fontSize: 13, textAlign: 'center', lineHeight: 18 }}>
+                    Loan approval will deduct from customer's balance (can go negative).
+                  </Text>
+                </View>
+              )}
+              
+              <Text style={{ color: '#666', fontSize: 15, textAlign: 'center', marginBottom: 24, lineHeight: 20 }}>
+                The customer does not have enough balance to complete this order.
+              </Text>
 
               {user?.staff?.access === "A" || user?.isOwner ?
-                <TouchableOpacity
-                  style={{ backgroundColor: '#8e24aa', borderRadius: 8, paddingVertical: 12, paddingHorizontal: 32, marginBottom: 12 }}
-                  onPress={() => {
-                    setInsufficientModalVisible(false);
-                    if (qrUserId) {
-                      router.push({ pathname: '/topups', params: { userId: qrUserId, type: 'uid' } });
-                    }
-                  }}
-                >
-                  <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Go to Top Up</Text>
-                </TouchableOpacity>
+                <View style={{ width: '100%' }}>
+                  {/* Action Buttons */}
+                  <TouchableOpacity
+                    style={{ 
+                      backgroundColor: '#4CAF50', 
+                      borderRadius: 8, 
+                      paddingVertical: 14, 
+                      paddingHorizontal: 20, 
+                      marginBottom: 12, 
+                      opacity: loanLoading ? 0.7 : 1,
+                      width: '100%',
+                      alignItems: 'center'
+                    }}
+                    onPress={handleLoanApproval}
+                    disabled={loanLoading}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Ionicons name="card-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+                      <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>
+                        {loanLoading ? 'Approving...' : `Approve Loan (৳${loanAmount.toFixed(2)})`}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={{ 
+                      backgroundColor: '#8e24aa', 
+                      borderRadius: 8, 
+                      paddingVertical: 14, 
+                      paddingHorizontal: 20, 
+                      marginBottom: 12,
+                      width: '100%',
+                      alignItems: 'center'
+                    }}
+                    onPress={() => {
+                      setInsufficientModalVisible(false);
+                      if (qrUserId) {
+                        router.push({ pathname: '/topups', params: { userId: qrUserId, type: 'uid' } });
+                      }
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Ionicons name="add-circle-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+                      <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Add Credit</Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
                 :
-                <Text style={{ color: '#666', fontWeight: 800, fontSize: 15, textAlign: 'center', marginBottom: 24 }}>User Needs to do topup from authorized personnel.</Text>
+                <View style={{ backgroundColor: '#fff3cd', borderRadius: 8, padding: 16, marginBottom: 20, width: '100%', borderWidth: 1, borderColor: '#ffeaa7' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                    <Ionicons name="information-circle" size={20} color="#856404" style={{ marginRight: 8 }} />
+                    <Text style={{ color: '#856404', fontWeight: 'bold', fontSize: 14 }}>Authorization Required</Text>
+                  </View>
+                  <Text style={{ color: '#856404', fontSize: 14, textAlign: 'center', lineHeight: 18 }}>
+                    Customer needs to request a top-up from authorized personnel (Owner or Staff with Level A access).
+                  </Text>
+                </View>
               }
 
               <TouchableOpacity
-                style={{ backgroundColor: '#888', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 28 }}
-                onPress={() => setInsufficientModalVisible(false)}
+                style={{ 
+                  backgroundColor: '#6c757d', 
+                  borderRadius: 8, 
+                  paddingVertical: 12, 
+                  paddingHorizontal: 32,
+                  width: '100%',
+                  alignItems: 'center',
+                  marginTop: 8
+                }}
+                onPress={() => {
+                  setInsufficientModalVisible(false);
+                  setLoanAmount(0);
+                  setOrderTotal(0);
+                  setCustomerBalance(0);
+                  setScanned(false);
+                  setScannedData(null);
+                  setOrderInfo(null);
+                  setQrOrderId(null);
+                  setQrUserId(null);
+                }}
               >
-                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Close</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="close-circle-outline" size={18} color="#fff" style={{ marginRight: 6 }} />
+                  <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Close</Text>
+                </View>
               </TouchableOpacity>
             </View>
           </View>

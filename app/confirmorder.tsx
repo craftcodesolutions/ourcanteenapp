@@ -35,13 +35,15 @@ export default function ConfirmOrderPage() {
     const router = useRouter();
 
     const [collectionTime, setCollectionTime] = useState<Date>(new Date());
-    const [showPicker, setShowPicker] = useState(false);
+    const [showDatePicker, setShowDatePicker] = useState(false);
+    const [showTimePicker, setShowTimePicker] = useState(false);
     const [modalVisible, setModalVisible] = useState(false);
     const [orderId, setOrderId] = useState<string | null>(null);
     const [orderUserId, setOrderUserId] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
     const [isOpenToday, setIsOpenToday] = useState(false);
+    const [timeValidationError, setTimeValidationError] = useState<string>('');
 
     const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
@@ -58,6 +60,47 @@ export default function ConfirmOrderPage() {
             tomorrow.setDate(tomorrow.getDate() + 1);
             return tomorrow;
         }
+    };
+
+    // Validate if selected time is within restaurant opening hours
+    const validateSelectedTime = (selectedDateTime: Date) => {
+        if (!restaurant) return true;
+
+        const days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+        const selectedDay = days[selectedDateTime.getDay()];
+        const dayHours = restaurant.openingHours[selectedDay];
+
+        // If restaurant is closed on selected day
+        if (!dayHours || !dayHours.open) {
+            setTimeValidationError(`Restaurant is closed on ${selectedDay.charAt(0).toUpperCase() + selectedDay.slice(1)}`);
+            return false;
+        }
+
+        // Check if selected time is within opening hours
+        const selectedHour = selectedDateTime.getHours();
+        const selectedMinute = selectedDateTime.getMinutes();
+        const selectedTimeInMinutes = selectedHour * 60 + selectedMinute;
+
+        const startHour = parseInt(dayHours.start || '0');
+        const endHour = parseInt(dayHours.end || '0');
+        const startTimeInMinutes = startHour * 60;
+        const endTimeInMinutes = endHour * 60;
+
+        if (selectedTimeInMinutes < startTimeInMinutes || selectedTimeInMinutes > endTimeInMinutes) {
+            const formatTime = (hour: number) => {
+                const suffix = hour >= 12 ? 'PM' : 'AM';
+                const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+                return `${hour12}:00 ${suffix}`;
+            };
+            
+            setTimeValidationError(
+                `Restaurant is closed at this time. Open: ${formatTime(startHour)} - ${formatTime(endHour)}`
+            );
+            return false;
+        }
+
+        setTimeValidationError('');
+        return true;
     };
 
     // Fetch restaurant data to check opening hours
@@ -105,12 +148,38 @@ export default function ConfirmOrderPage() {
         if (restaurant) {
             const minDate = getMinimumDate();
             setCollectionTime(minDate);
+            // Validate the initial time
+            validateSelectedTime(minDate);
         }
     }, [restaurant, isOpenToday]);
 
-    const onChange = (event: any, selectedDate?: Date) => {
-        setShowPicker(Platform.OS === 'ios');
-        if (selectedDate) setCollectionTime(selectedDate);
+    const onDateChange = (event: any, selectedDate?: Date) => {
+        setShowDatePicker(Platform.OS === 'ios');
+        if (selectedDate) {
+            const newDateTime = new Date(collectionTime);
+            newDateTime.setFullYear(selectedDate.getFullYear());
+            newDateTime.setMonth(selectedDate.getMonth());
+            newDateTime.setDate(selectedDate.getDate());
+            
+            // Validate the new date/time combination
+            validateSelectedTime(newDateTime);
+            setCollectionTime(newDateTime);
+        }
+    };
+
+    const onTimeChange = (event: any, selectedTime?: Date) => {
+        setShowTimePicker(Platform.OS === 'ios');
+        if (selectedTime) {
+            const newDateTime = new Date(collectionTime);
+            newDateTime.setHours(selectedTime.getHours());
+            newDateTime.setMinutes(selectedTime.getMinutes());
+            newDateTime.setSeconds(0); // Set seconds to 0
+            newDateTime.setMilliseconds(0); // Set milliseconds to 0
+            
+            // Validate the new date/time combination
+            validateSelectedTime(newDateTime);
+            setCollectionTime(newDateTime);
+        }
     };
 
     const handleOrderSubmit = async () => {
@@ -119,6 +188,13 @@ export default function ConfirmOrderPage() {
             alert('Your cart is empty.');
             return;
         }
+
+        // Validate collection time before submitting
+        if (!validateSelectedTime(collectionTime)) {
+            alert(`Cannot place order: ${timeValidationError}`);
+            return;
+        }
+
         setLoading(true);
 
         console.log("cart", cart);
@@ -197,19 +273,60 @@ export default function ConfirmOrderPage() {
                     )}
                 </View>
                 <View style={styles.section}>
-                    <Text style={[styles.sectionTitle, { color: primary }]}>Collection Date</Text>
-                    <TouchableOpacity onPress={() => setShowPicker(true)} style={[styles.pickerButton, { backgroundColor: primary }]}>
-                        <Text style={{ color: colorScheme === 'dark' ? '#222' : '#fff', fontWeight: 'bold' }}>{collectionTime.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</Text>
+                    <Text style={[styles.sectionTitle, { color: primary }]}>Collection Date & Time</Text>
+                    
+                    {/* Date Picker */}
+                    <TouchableOpacity onPress={() => setShowDatePicker(true)} style={[styles.pickerButton, { backgroundColor: primary, marginBottom: 8 }]}>
+                        <Text style={{ color: colorScheme === 'dark' ? '#222' : '#fff', fontWeight: 'bold' }}>
+                            📅 {collectionTime.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                        </Text>
                     </TouchableOpacity>
-                    {showPicker && (
+                    
+                    {/* Time Picker */}
+                    <TouchableOpacity onPress={() => setShowTimePicker(true)} style={[styles.pickerButton, { backgroundColor: secondaryBg, borderWidth: 1, borderColor: primary }]}>
+                        <Text style={{ color: primary, fontWeight: 'bold' }}>
+                            🕐 {collectionTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                    </TouchableOpacity>
+                    
+                    {showDatePicker && (
                         <DateTimePicker
                             value={collectionTime}
                             mode="date"
                             display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                            onChange={onChange}
+                            onChange={onDateChange}
                             minimumDate={getMinimumDate()}
                             maximumDate={new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)}
                         />
+                    )}
+                    
+                    {showTimePicker && (
+                        <DateTimePicker
+                            value={collectionTime}
+                            mode="time"
+                            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                            onChange={onTimeChange}
+                            minuteInterval={1}
+                        />
+                    )}
+
+                    {/* Time Validation Error */}
+                    {timeValidationError && (
+                        <View style={{ 
+                            backgroundColor: '#ffebee', 
+                            borderRadius: 8, 
+                            padding: 12, 
+                            marginTop: 8,
+                            borderWidth: 1,
+                            borderColor: '#ffcdd2'
+                        }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <Ionicons name="warning" size={18} color="#d32f2f" style={{ marginRight: 8 }} />
+                                <Text style={{ color: '#d32f2f', fontSize: 14, fontWeight: '600', flex: 1 }}>
+                                    {timeValidationError}
+                                </Text>
+                            </View>
+                        </View>
                     )}
                 </View>
 
@@ -290,20 +407,20 @@ export default function ConfirmOrderPage() {
                 style={[
                     styles.submitButton,
                     {
-                        backgroundColor: restaurant ? primary : '#ccc',
-                        opacity: restaurant ? 1 : 0.6
+                        backgroundColor: (restaurant && !timeValidationError) ? primary : '#ccc',
+                        opacity: (restaurant && !timeValidationError) ? 1 : 0.6
                     }
                 ]}
                 onPress={handleOrderSubmit}
                 activeOpacity={0.8}
-                disabled={!restaurant || loading}
+                disabled={!restaurant || loading || !!timeValidationError}
             >
                 <Text style={{
-                    color: restaurant ? (colorScheme === 'dark' ? '#222' : '#fff') : '#666',
+                    color: (restaurant && !timeValidationError) ? (colorScheme === 'dark' ? '#222' : '#fff') : '#666',
                     fontWeight: 'bold',
                     fontSize: 16
                 }}>
-                    {!restaurant ? 'Loading...' : 'Submit Order'}
+                    {!restaurant ? 'Loading...' : timeValidationError ? 'Invalid Time Selected' : 'Submit Order'}
                 </Text>
             </TouchableOpacity>
             <Modal

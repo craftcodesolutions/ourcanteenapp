@@ -5,7 +5,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import axios from 'axios';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, FlatList, Image, Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 interface OrderItem {
@@ -26,6 +26,7 @@ interface Order {
   collectionTime: string;
   createdAt: string;
   updatedAt: string;
+  loanApproved?: boolean;
 }
 
 const OrdersPage = () => {
@@ -34,6 +35,8 @@ const OrdersPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null); // <-- add
+  const [penaltyModalVisible, setPenaltyModalVisible] = useState(false);
+  const [penaltyInfo, setPenaltyInfo] = useState<any>(null);
   const colorScheme = useColorScheme() ?? 'light';
   const cardBg = Colors[colorScheme].background;
   const textColor = Colors[colorScheme].text;
@@ -100,9 +103,23 @@ const OrdersPage = () => {
           },
         }
       );
-      setOrders(response.data.orders || []);
-    } catch (error: any) {
 
+      // Check if penalty is required
+      if (response.data.requiresPenalty) {
+        setPenaltyInfo(response.data);
+        setPenaltyModalVisible(true);
+        setCancellingOrderId(null);
+        return;
+      }
+
+      // Order cancelled successfully
+      setOrders(response.data.orders || []);
+      if (response.data.penaltyMessage) {
+        alert(response.data.penaltyMessage);
+      } else {
+        alert('Order cancelled successfully');
+      }
+    } catch (error: any) {
       alert(
         error.response?.data?.error ||
         error.message ||
@@ -110,6 +127,43 @@ const OrdersPage = () => {
       );
     } finally {
       setCancellingOrderId(null);
+    }
+  };
+
+  // Handle penalty confirmation
+  const handleConfirmPenalty = async () => {
+    if (!penaltyInfo?.order?._id) return;
+    
+    setCancellingOrderId(penaltyInfo.order._id);
+    setPenaltyModalVisible(false);
+    
+    try {
+      const response = await axios.patch(
+        'https://ourcanteennbackend.vercel.app/api/user/order',
+        { orderId: penaltyInfo.order._id, confirmPenalty: true },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      
+      setOrders(response.data.orders || []);
+      if (response.data.penaltyMessage) {
+        alert(response.data.penaltyMessage);
+      } else {
+        alert('Order cancelled successfully');
+      }
+    } catch (error: any) {
+      alert(
+        error.response?.data?.error ||
+        error.message ||
+        'Failed to cancel order'
+      );
+    } finally {
+      setCancellingOrderId(null);
+      setPenaltyInfo(null);
     }
   };
 
@@ -176,7 +230,19 @@ const OrdersPage = () => {
             <View style={[styles.orderFooter, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
               <View>
                 <Text style={[styles.total, { color: nameColor }]}>Total: ৳{order.total.toFixed(2)}</Text>
-                <Text style={[styles.collectionDate, { color: nameColor }]}>Collection: {`${new Date(order.collectionTime).getDate()} ${monthNames[new Date(order.collectionTime).getMonth()]} ${new Date(order.collectionTime).getFullYear()}`}</Text>
+                {order.loanApproved && (
+                  <Text style={[styles.loanIndicator, { color: '#ff6b35' }]}>💳 Paid via Loan</Text>
+                )}
+                <Text style={[styles.collectionDate, { color: nameColor }]}>
+                  Collection: {new Date(order.collectionTime).toLocaleString([], { 
+                    weekday: 'short',
+                    month: 'short', 
+                    day: 'numeric', 
+                    year: 'numeric',
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                  })}
+                </Text>
               </View>
             </View>
             {/* Action buttons in a single horizontal row, spaced between */}
@@ -212,6 +278,221 @@ const OrdersPage = () => {
           </View>
         )}
       />
+      
+      {/* Penalty Warning Modal */}
+      <Modal
+        visible={penaltyModalVisible}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setPenaltyModalVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <View style={{ 
+            backgroundColor: cardBg, 
+            borderRadius: 16, 
+            padding: 0, 
+            width: '100%', 
+            maxWidth: 380,
+            shadowColor: itemShadow,
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.25,
+            shadowRadius: 16,
+            elevation: 8
+          }}>
+            {/* Header */}
+            <View style={{ 
+              alignItems: 'center', 
+              paddingVertical: 24, 
+              paddingHorizontal: 20,
+              borderBottomWidth: 1,
+              borderBottomColor: dividerColor
+            }}>
+              <MaterialIcons name="warning" size={56} color="#ff6b35" style={{ marginBottom: 12 }} />
+              <Text style={{ 
+                color: textColor, 
+                fontSize: 22, 
+                fontWeight: 'bold', 
+                textAlign: 'center',
+                marginBottom: 8
+              }}>
+                Cancellation Penalty
+              </Text>
+              <Text style={{ 
+                color: subtotalColor, 
+                fontSize: 15, 
+                textAlign: 'center', 
+                lineHeight: 22,
+                paddingHorizontal: 10
+              }}>
+                This order is close to collection time
+              </Text>
+            </View>
+            
+            {/* Content */}
+            {penaltyInfo && (
+              <View style={{ padding: 20 }}>
+                {/* Order Details Card */}
+                <View style={{ 
+                  backgroundColor: colorScheme === 'light' ? '#fafafa' : '#1a1a1a', 
+                  borderRadius: 12, 
+                  padding: 16, 
+                  marginBottom: 20,
+                  borderWidth: 1,
+                  borderColor: dividerColor
+                }}>
+                  <Text style={{ 
+                    color: textColor, 
+                    fontSize: 16, 
+                    fontWeight: 'bold', 
+                    marginBottom: 12,
+                    textAlign: 'center'
+                  }}>
+                    Order Details
+                  </Text>
+                  
+                  <View style={{ marginBottom: 12 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <Text style={{ color: subtotalColor, fontSize: 14, flex: 1 }}>Order Total</Text>
+                      <Text style={{ color: textColor, fontSize: 16, fontWeight: 'bold' }}>৳{penaltyInfo.order?.total}</Text>
+                    </View>
+                  </View>
+                  
+                  {penaltyInfo.order?.collectionTime && (
+                    <View style={{ marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <Text style={{ color: subtotalColor, fontSize: 14, flex: 1 }}>Collection Time</Text>
+                        <Text style={{ color: textColor, fontSize: 14, fontWeight: '600', textAlign: 'right', flex: 1 }}>
+                          {new Date(penaltyInfo.order.collectionTime).toLocaleString([], { 
+                            weekday: 'short',
+                            month: 'short', 
+                            day: 'numeric', 
+                            hour: '2-digit', 
+                            minute: '2-digit' 
+                          })}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                  
+                  <View style={{ marginBottom: 12 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <Text style={{ color: subtotalColor, fontSize: 14, flex: 1 }}>Time Remaining</Text>
+                      <Text style={{ color: '#ff6b35', fontSize: 14, fontWeight: 'bold' }}>
+                        {penaltyInfo.hoursUntilCollection ? `${penaltyInfo.hoursUntilCollection}h` : 
+                         penaltyInfo.hoursElapsed ? `${penaltyInfo.hoursElapsed}h` : 'Soon'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Penalty Info Card */}
+                <View style={{ 
+                  backgroundColor: colorScheme === 'light' ? '#fff5f2' : '#2d1410', 
+                  borderRadius: 12, 
+                  padding: 16, 
+                  marginBottom: 20,
+                  borderWidth: 1,
+                  borderColor: colorScheme === 'light' ? '#ffe0db' : '#4a2c1f'
+                }}>
+                  <Text style={{ 
+                    color: colorScheme === 'light' ? '#d84315' : '#ff8a65', 
+                    fontSize: 16, 
+                    fontWeight: 'bold', 
+                    marginBottom: 12,
+                    textAlign: 'center'
+                  }}>
+                    Penalty Charges
+                  </Text>
+                  
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <Text style={{ color: subtotalColor, fontSize: 14 }}>Penalty Rate</Text>
+                    <Text style={{ color: '#ff6b35', fontSize: 14, fontWeight: 'bold' }}>{penaltyInfo.penaltyRate}%</Text>
+                  </View>
+                  
+                  <View style={{ height: 1, backgroundColor: colorScheme === 'light' ? '#ffe0db' : '#4a2c1f', marginVertical: 12 }} />
+                  
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ color: colorScheme === 'light' ? '#d84315' : '#ff8a65', fontSize: 18, fontWeight: 'bold' }}>Total Penalty</Text>
+                    <Text style={{ color: colorScheme === 'light' ? '#d84315' : '#ff8a65', fontSize: 20, fontWeight: 'bold' }}>৳{penaltyInfo.penaltyAmount}</Text>
+                  </View>
+                </View>
+
+                <Text style={{ 
+                  color: subtotalColor, 
+                  fontSize: 13, 
+                  textAlign: 'center', 
+                  marginBottom: 24,
+                  lineHeight: 18,
+                  fontStyle: 'italic'
+                }}>
+                  This amount will be deducted from your account balance
+                </Text>
+              </View>
+            )}
+            
+            {/* Action Buttons */}
+            <View style={{ 
+              flexDirection: 'row', 
+              gap: 12, 
+              paddingHorizontal: 20, 
+              paddingVertical: 20,
+              paddingTop: 0,
+              borderTopWidth: 1,
+              borderTopColor: dividerColor
+            }}>
+              <TouchableOpacity
+                style={{ 
+                  flex: 1, 
+                  backgroundColor: colorScheme === 'light' ? '#f8f9fa' : '#2a2a2a', 
+                  borderRadius: 12, 
+                  paddingVertical: 16, 
+                  alignItems: 'center',
+                  borderWidth: 1,
+                  borderColor: dividerColor
+                }}
+                onPress={() => {
+                  setPenaltyModalVisible(false);
+                  setPenaltyInfo(null);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={{ 
+                  color: colorScheme === 'light' ? '#495057' : '#e0e0e0', 
+                  fontWeight: '700', 
+                  fontSize: 16 
+                }}>
+                  Keep Order
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={{ 
+                  flex: 1, 
+                  backgroundColor: '#dc3545', 
+                  borderRadius: 12, 
+                  paddingVertical: 16, 
+                  alignItems: 'center',
+                  shadowColor: '#dc3545',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 4,
+                  elevation: 3
+                }}
+                onPress={handleConfirmPenalty}
+                activeOpacity={0.8}
+              >
+                <Text style={{ 
+                  color: '#fff', 
+                  fontWeight: '700', 
+                  fontSize: 16 
+                }}>
+                  Cancel & Pay
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -318,6 +599,11 @@ const styles = StyleSheet.create({
   total: {
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  loanIndicator: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 4,
   },
 });
 
