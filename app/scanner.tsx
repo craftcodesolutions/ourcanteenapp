@@ -4,7 +4,7 @@ import axios from 'axios';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ActivityIndicator, Image, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function ScannerScreen() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -26,6 +26,11 @@ export default function ScannerScreen() {
   const [loanAmount, setLoanAmount] = useState<number>(0);
   const [orderTotal, setOrderTotal] = useState<number>(0);
   const [customerBalance, setCustomerBalance] = useState<number>(0);
+  
+  // Customer Loan States
+  const [customerLoans, setCustomerLoans] = useState<any[]>([]);
+  const [settlingLoans, setSettlingLoans] = useState(false);
+  const [settlementNotes, setSettlementNotes] = useState('');
 
   const isPermissionGranted = Boolean(permission?.granted);
 
@@ -56,6 +61,13 @@ export default function ScannerScreen() {
 
   const handleLoanApproval = async () => {
     if (!qrOrderId || !qrUserId || !loanAmount) return;
+    
+    // Check current order status before proceeding with loan approval
+    if (orderInfo && orderInfo.status === 'SUCCESS') {
+      setError('Order is already paid and marked as SUCCESS. Loan approval not needed.');
+      setInsufficientModalVisible(false);
+      return;
+    }
     
     setLoanLoading(true);
     try {
@@ -93,12 +105,150 @@ export default function ScannerScreen() {
       if (err.response?.status === 403) {
         logout();
         router.push("/(auth)/signin");
+      } else if (err.response?.status === 400 && err.response?.data?.alreadySuccess) {
+        setError('Order is already paid and marked as SUCCESS. Loan approval not needed.');
+        setInsufficientModalVisible(false);
+        // Reset states
+        setScanned(false);
+        setScannedData(null);
+        setQrOrderId(null);
+        setQrUserId(null);
+        setLoanAmount(0);
+        setOrderTotal(0);
+        setCustomerBalance(0);
+      } else if (err.response?.status === 400 && err.response?.data?.alreadyApproved) {
+        setError('Loan has already been approved for this order.');
+        setInsufficientModalVisible(false);
       } else {
         setError(err?.response?.data?.error || 'Failed to approve loan');
         setInsufficientModalVisible(false);
       }
     }
     setLoanLoading(false);
+  };
+
+  // Fetch customer loans when QR is scanned
+  const fetchCustomerLoans = async (userId: string) => {
+    try {
+      const response = await axios.get(
+        `https://ourcanteennbackend.vercel.app/api/owner/loans?status=ACTIVE&userId=${userId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.data.success) {
+        const activeLoans = response.data.loans.filter((loan: any) => loan.status === 'ACTIVE');
+        setCustomerLoans(activeLoans);
+      }
+    } catch (err: any) {
+      console.error('Error fetching customer loans:', err);
+      setCustomerLoans([]);
+    }
+  };
+
+  // Settle individual loan
+  const settleLoan = async (loanId: string) => {
+    if (!qrUserId) return;
+    
+    setSettlingLoans(true);
+    try {
+      const response = await axios.post(
+        'https://ourcanteennbackend.vercel.app/api/owner/settle-loan',
+        {
+          loanIds: [loanId],
+          userId: qrUserId,
+          notes: settlementNotes.trim() || 'Individual loan settlement'
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.data.success) {
+        Alert.alert('Success', `Loan settled successfully! New balance: ৳${response.data.data.customer.newCreditBalance}`);
+        // Refresh customer loans
+        fetchCustomerLoans(qrUserId);
+        setSettlementNotes('');
+        
+        // Close modals if they're open
+        setModalVisible(false);
+        setInsufficientModalVisible(false);
+      }
+    } catch (err: any) {
+      if (err.response?.status === 403) {
+        logout();
+        router.push("/(auth)/signin");
+      } else {
+        Alert.alert('Error', err?.response?.data?.error || 'Failed to settle loan');
+      }
+    }
+    setSettlingLoans(false);
+  };
+
+  // Settle all loans at once
+  const settleAllLoans = async () => {
+    if (!qrUserId || customerLoans.length === 0) return;
+    
+    const totalAmount = customerLoans.reduce((sum, loan) => sum + loan.loanAmount, 0);
+    
+    Alert.alert(
+      'Settle All Loans',
+      `Are you sure you want to settle all ${customerLoans.length} loans for a total of ৳${totalAmount.toFixed(2)}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Settle All', 
+          onPress: async () => {
+            setSettlingLoans(true);
+            try {
+              const loanIds = customerLoans.map(loan => loan._id);
+              const response = await axios.post(
+                'https://ourcanteennbackend.vercel.app/api/owner/settle-loan',
+                {
+                  loanIds,
+                  userId: qrUserId,
+                  notes: settlementNotes.trim() || `Bulk settlement of ${customerLoans.length} loans`
+                },
+                {
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                  },
+                }
+              );
+
+              if (response.data.success) {
+                Alert.alert(
+                  'Success', 
+                  `Successfully settled ${response.data.data.settledLoans} loans for ৳${response.data.data.totalAmount}! New balance: ৳${response.data.data.customer.newCreditBalance}`
+                );
+                // Refresh customer loans
+                fetchCustomerLoans(qrUserId);
+                setSettlementNotes('');
+                
+                // Close modals if they're open
+                setModalVisible(false);
+                setInsufficientModalVisible(false);
+              }
+            } catch (err: any) {
+              if (err.response?.status === 403) {
+                logout();
+                router.push("/(auth)/signin");
+              } else {
+                Alert.alert('Error', err?.response?.data?.error || 'Failed to settle loans');
+              }
+            }
+            setSettlingLoans(false);
+          }
+        }
+      ]
+    );
   };
 
   const sendOrderStatus = async (orderId: string, userId: string) => {
@@ -122,7 +272,12 @@ export default function ScannerScreen() {
         setModalVisible(true);
         console.log(response.data.order);
       } else if (response.data.alreadySuccess) {
-        setError('Order already marked as SUCCESS');
+        setError('Order already paid and marked as SUCCESS. No further action needed.');
+        // Reset scan state to allow scanning another QR code
+        setScanned(false);
+        setScannedData(null);
+        setQrOrderId(null);
+        setQrUserId(null);
       } else {
         setError('Failed to update order status');
       }
@@ -132,9 +287,20 @@ export default function ScannerScreen() {
         logout();
         router.push("/(auth)/signin");
       } else if (err.response && err.response.status === 406) {
-        setInsufficientModalVisible(true);
         // Check if order details are included in the 406 response
         if (err.response.data && err.response.data.order) {
+          // Check if order is already SUCCESS - should not show insufficient modal
+          if (err.response.data.order.status === 'SUCCESS') {
+            setError('Order already paid and marked as SUCCESS. No further action needed.');
+            // Reset scan state to allow scanning another QR code
+            setScanned(false);
+            setScannedData(null);
+            setQrOrderId(null);
+            setQrUserId(null);
+            return;
+          }
+          
+          setInsufficientModalVisible(true);
           setLoanAmount(err.response.data.order.total);
           setOrderTotal(err.response.data.order.total);
           // Set customer balance if available
@@ -165,6 +331,8 @@ export default function ScannerScreen() {
       if (parsed.orderId && parsed.userId) {
         setQrOrderId(parsed.orderId);
         setQrUserId(parsed.userId);
+        // Fetch customer loans when QR is scanned
+        fetchCustomerLoans(parsed.userId);
         sendOrderStatus(parsed.orderId, parsed.userId);
       } else {
         setError('Invalid QR code data');
@@ -181,6 +349,14 @@ export default function ScannerScreen() {
 
   const handleSuccess = async () => {
     if (!qrOrderId || !qrUserId) return;
+    
+    // Check if order is already SUCCESS before proceeding
+    if (orderInfo && orderInfo.status === 'SUCCESS') {
+      setError('Order is already paid and marked as SUCCESS.');
+      setModalVisible(false);
+      return;
+    }
+    
     setSuccessLoading(true);
     try {
       const response = await axios.put(
@@ -196,6 +372,9 @@ export default function ScannerScreen() {
       if (response.data.status === 'SUCCESS') {
         setModalVisible(false);
         setSuccessModalVisible(true);
+      } else if (response.data.alreadySuccess) {
+        setError('Order already paid and marked as SUCCESS.');
+        setModalVisible(false);
       }
     } catch (err: any) {
       if (err.response?.status === 403) {
@@ -243,6 +422,8 @@ export default function ScannerScreen() {
             onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
           />
         </View>
+        
+
         {loading && <ActivityIndicator size="large" color="#8e24aa" style={{ marginTop: 16 }} />}
         {error && (
           <View style={styles.resultContainer}>
@@ -294,22 +475,67 @@ export default function ScannerScreen() {
                     </View>
                   )}
                   <Text style={{ color: '#aaa', fontSize: 12, textAlign: 'right', marginBottom: 4 }}>Created: {new Date(orderInfo.createdAt).toLocaleString()}</Text>
+                  
+                  {/* Customer Loans Section */}
+                  {customerLoans.length > 0 && (
+                    <>
+                      <View style={{ height: 1, backgroundColor: '#eee', marginVertical: 12 }} />
+                      <Text style={{ color: '#444', fontWeight: 'bold', fontSize: 15, marginBottom: 8 }}>Active Loans</Text>
+                      {customerLoans.map((loan) => (
+                        <View key={loan._id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, backgroundColor: '#fff3cd', borderRadius: 6, padding: 8, borderWidth: 1, borderColor: '#ffeaa7' }}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ color: '#856404', fontWeight: 'bold', fontSize: 14 }}>
+                              Order #{loan.orderId.slice(-8).toUpperCase()}
+                            </Text>
+                            <Text style={{ color: '#856404', fontSize: 12 }}>
+                              {new Date(loan.createdAt).toLocaleDateString()}
+                            </Text>
+                          </View>
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={{ color: '#856404', fontWeight: 'bold', fontSize: 16 }}>
+                              ৳{loan.loanAmount.toFixed(2)}
+                            </Text>
+                            <TouchableOpacity
+                              style={{ backgroundColor: '#4CAF50', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 4, marginTop: 4 }}
+                              onPress={() => settleLoan(loan._id)}
+                              disabled={settlingLoans}
+                            >
+                              <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>
+                                {settlingLoans ? 'Processing...' : 'Settle'}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ))}
+                      {customerLoans.length > 1 && (
+                        <TouchableOpacity
+                          style={{ backgroundColor: '#FF9800', borderRadius: 8, paddingVertical: 12, alignItems: 'center', marginTop: 8 }}
+                          onPress={settleAllLoans}
+                          disabled={settlingLoans}
+                        >
+                          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>
+                            Settle All {customerLoans.length} Loans (৳{customerLoans.reduce((sum, loan) => sum + loan.loanAmount, 0).toFixed(2)})
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </>
+                  )}
                 </ScrollView>
                 <View style={{ flexDirection: 'row' }}>
                   <TouchableOpacity
                     style={{
-                      backgroundColor: '#222',
+                      backgroundColor: orderInfo.status === 'SUCCESS' ? '#888' : '#222',
                       borderBottomLeftRadius: 10,
                       paddingVertical: 14,
                       alignItems: 'center',
                       flex: 1,
-                      opacity: successLoading ? 0.7 : 1,
+                      opacity: (successLoading || orderInfo.status === 'SUCCESS') ? 0.7 : 1,
                     }}
                     onPress={handleSuccess}
-                    disabled={successLoading}
+                    disabled={successLoading || orderInfo.status === 'SUCCESS'}
                   >
                     <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16, letterSpacing: 0.5 }}>
-                      {successLoading ? 'Processing...' : 'Success'}
+                      {orderInfo.status === 'SUCCESS' ? 'Already Paid' : (successLoading ? 'Processing...' : 'Success')}
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -404,9 +630,50 @@ export default function ScannerScreen() {
                 </View>
               )}
               
-              <Text style={{ color: '#666', fontSize: 15, textAlign: 'center', marginBottom: 24, lineHeight: 20 }}>
+              <Text style={{ color: '#666', fontSize: 15, textAlign: 'center', marginBottom: 16, lineHeight: 20 }}>
                 The customer does not have enough balance to complete this order.
               </Text>
+
+              {/* Customer Active Loans in Insufficient Balance Modal */}
+              {customerLoans.length > 0 && (
+                <View style={{ backgroundColor: '#fff3cd', borderRadius: 8, padding: 12, marginBottom: 16, borderWidth: 1, borderColor: '#ffeaa7' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                    <Ionicons name="card" size={18} color="#856404" />
+                    <Text style={{ color: '#856404', fontWeight: 'bold', fontSize: 14, marginLeft: 6 }}>
+                      {customerLoans.length} Active Loan{customerLoans.length > 1 ? 's' : ''} (৳{customerLoans.reduce((sum, loan) => sum + loan.loanAmount, 0).toFixed(2)})
+                    </Text>
+                  </View>
+                  
+                  {customerLoans.map((loan, index) => (
+                    <View key={loan._id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: index === customerLoans.length - 1 ? 0 : 6 }}>
+                      <Text style={{ color: '#856404', fontSize: 12, flex: 1 }}>
+                        #{loan.orderId.slice(-6)} - ৳{loan.loanAmount.toFixed(2)}
+                      </Text>
+                      <TouchableOpacity
+                        style={{ backgroundColor: '#4CAF50', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 3 }}
+                        onPress={() => settleLoan(loan._id)}
+                        disabled={settlingLoans}
+                      >
+                        <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>
+                          {settlingLoans ? '...' : 'Settle'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                  
+                  {customerLoans.length > 1 && (
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#FF9800', borderRadius: 6, paddingVertical: 8, alignItems: 'center', marginTop: 8 }}
+                      onPress={settleAllLoans}
+                      disabled={settlingLoans}
+                    >
+                      <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 12 }}>
+                        {settlingLoans ? 'Processing...' : `Settle All (৳${customerLoans.reduce((sum, loan) => sum + loan.loanAmount, 0).toFixed(2)})`}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
 
               {user?.staff?.access === "A" || user?.isOwner ?
                 <View style={{ width: '100%' }}>
@@ -499,6 +766,7 @@ export default function ScannerScreen() {
           </View>
         </Modal>
       </View>
+
     </SafeAreaView>
   );
 }

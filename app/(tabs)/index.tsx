@@ -47,6 +47,10 @@ interface MenuItem {
   createdAt: string;
   updatedAt: string;
   restaurantName: string;
+  discount?: {
+    percentage: number;
+    validUntil: string;
+  };
 }
 
 export default function HomeScreen() {
@@ -188,7 +192,19 @@ export default function HomeScreen() {
           <ThemedText style={{ fontSize: 12, color: primary, marginTop: 2 }}>{item.cuisine?.name}</ThemedText>
           {/* <ThemedText style={{ fontSize: 13, color: textColor, marginTop: 2 }}>{item.description}</ThemedText> */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-            <ThemedText style={{ fontSize: 15, color: primary, fontWeight: 'bold', marginTop: 4 }}>৳{item.price}</ThemedText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+              {item.discount && new Date(item.discount.validUntil) > new Date() ? (
+                <>
+                  <ThemedText style={{ fontSize: 13, color: textColor, textDecorationLine: 'line-through', opacity: 0.6, marginRight: 6 }}>৳{item.price}</ThemedText>
+                  <ThemedText style={{ fontSize: 15, color: '#ff6b35', fontWeight: 'bold' }}>৳{Math.round(item.price * (1 - item.discount.percentage / 100))}</ThemedText>
+                  <View style={{ backgroundColor: '#ff6b35', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, marginLeft: 6 }}>
+                    <ThemedText style={{ fontSize: 10, color: '#fff', fontWeight: 'bold' }}>{item.discount.percentage}% OFF</ThemedText>
+                  </View>
+                </>
+              ) : (
+                <ThemedText style={{ fontSize: 15, color: primary, fontWeight: 'bold' }}>৳{item.price}</ThemedText>
+              )}
+            </View>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               {cartItem ? (
                 <>
@@ -353,7 +369,19 @@ export default function HomeScreen() {
                   <ThemedText style={{ fontSize: 15, marginBottom: 10, textAlign: 'left', color: textColor }}>{selectedItem.description}</ThemedText>
                   <ThemedText style={{ fontSize: 14, color: textColor, opacity: 0.6, marginBottom: 2, textAlign: 'left' }}>Restaurant: {selectedItem.restaurantName}</ThemedText>
                   <ThemedText style={{ fontSize: 14, color: textColor, opacity: 0.6, marginBottom: 10, textAlign: 'left' }}>Cuisine: {selectedItem.cuisine?.name ? selectedItem.cuisine.name : ''}</ThemedText>
-                  <ThemedText style={{ fontSize: 18, color: primary, fontWeight: 'bold', marginBottom: 16, textAlign: 'left' }}>৳{selectedItem.price}</ThemedText>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                    {selectedItem.discount && new Date(selectedItem.discount.validUntil) > new Date() ? (
+                      <>
+                        <ThemedText style={{ fontSize: 16, color: textColor, textDecorationLine: 'line-through', opacity: 0.6, marginRight: 8 }}>৳{selectedItem.price}</ThemedText>
+                        <ThemedText style={{ fontSize: 18, color: '#ff6b35', fontWeight: 'bold' }}>৳{Math.round(selectedItem.price * (1 - selectedItem.discount.percentage / 100))}</ThemedText>
+                        <View style={{ backgroundColor: '#ff6b35', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, marginLeft: 8 }}>
+                          <ThemedText style={{ fontSize: 12, color: '#fff', fontWeight: 'bold' }}>{selectedItem.discount.percentage}% OFF</ThemedText>
+                        </View>
+                      </>
+                    ) : (
+                      <ThemedText style={{ fontSize: 18, color: primary, fontWeight: 'bold' }}>৳{selectedItem.price}</ThemedText>
+                    )}
+                  </View>
                   {(() => {
                     const cartItem = cart.find(ci => ci._id === selectedItem._id);
                     if (cartItem) {

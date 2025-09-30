@@ -9,7 +9,8 @@ import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Modal, ScrollView, StyleSheet, Switch, TextInput, TouchableOpacity, useColorScheme, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, ScrollView, StyleSheet, Switch, TextInput, TouchableOpacity, useColorScheme, View, Platform } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Types
@@ -21,6 +22,10 @@ interface MenuItem {
   image?: string;
   cuisine: string;
   available: boolean;
+  discount?: {
+    percentage: number;
+    validUntil: string;
+  };
 }
 
 interface Cuisine {
@@ -69,6 +74,15 @@ export default function MenuScreen() {
   const [config, setConfig] = useState<Config>({ cuisines: [], ownCuisine: [] });
   const [configLoading, setConfigLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  
+  // Discount modal state
+  const [discountModalVisible, setDiscountModalVisible] = useState(false);
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [discountPercentage, setDiscountPercentage] = useState('');
+  const [discountValidUntil, setDiscountValidUntil] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [sendingDiscount, setSendingDiscount] = useState(false);
 
   // Fetch menu items
   const fetchMenu = async () => {
@@ -208,6 +222,76 @@ export default function MenuScreen() {
     }
   };
 
+  // Open discount modal
+  const openDiscountModal = () => {
+    setSelectedItems([]);
+    setDiscountPercentage('');
+    // Set default to tomorrow at 23:59
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(23, 59, 0, 0);
+    setDiscountValidUntil(tomorrow);
+    setDiscountModalVisible(true);
+  };
+
+  // Toggle item selection for discount
+  const toggleItemSelection = (itemId: string) => {
+    setSelectedItems(prev => 
+      prev.includes(itemId) 
+        ? prev.filter(id => id !== itemId)
+        : [...prev, itemId]
+    );
+  };
+
+  // Handle discount submission
+  const handleDiscountSubmit = async () => {
+    if (selectedItems.length === 0) {
+      alert('Please select at least one food item');
+      return;
+    }
+    if (!discountPercentage || Number(discountPercentage) <= 0 || Number(discountPercentage) > 100) {
+      alert('Please enter a valid discount percentage (1-100)');
+      return;
+    }
+    if (discountValidUntil <= new Date()) {
+      alert('Valid until date must be in the future');
+      return;
+    }
+
+    setSendingDiscount(true);
+    try {
+      const response = await axios.post(
+        'https://ourcanteennbackend.vercel.app/api/owner/discount',
+        {
+          menuItemIds: selectedItems,
+          discountPercentage: Number(discountPercentage),
+          validUntil: discountValidUntil.toISOString(),
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      alert('Discount applied and notifications sent to users!');
+      setDiscountModalVisible(false);
+      fetchMenu(); // Refresh menu to show discount
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        logout();
+        router.push("/(auth)/signin");
+        return;
+      }
+      
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to apply discount';
+      alert(errorMessage);
+    } finally {
+      setSendingDiscount(false);
+    }
+  };
+
   // UI
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: cardBg }}>
@@ -215,13 +299,22 @@ export default function MenuScreen() {
         <ScrollView contentContainerStyle={{ flexGrow: 1, padding: 16, paddingBottom: 48 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
             <ThemedText type="title" style={{ fontSize: 22, fontWeight: '700' }}>Menu</ThemedText>
-            <TouchableOpacity
-              style={{ backgroundColor: primary, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 18 }}
-              onPress={() => openModal(null)}
-              activeOpacity={0.8}
-            >
-              <ThemedText style={{ color: colorScheme === 'light' ? '#fff' : '#18181b', fontWeight: '600', fontSize: 15 }}>Add Food Item</ThemedText>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                style={{ backgroundColor: '#ff6b35', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 18 }}
+                onPress={openDiscountModal}
+                activeOpacity={0.8}
+              >
+                <ThemedText style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>Add Discount</ThemedText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ backgroundColor: primary, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 18 }}
+                onPress={() => openModal(null)}
+                activeOpacity={0.8}
+              >
+                <ThemedText style={{ color: colorScheme === 'light' ? '#fff' : '#18181b', fontWeight: '600', fontSize: 15 }}>Add Food Item</ThemedText>
+              </TouchableOpacity>
+            </View>
           </View>
           {loading ? (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 80 }}>
@@ -267,7 +360,18 @@ export default function MenuScreen() {
                     <ThemedText style={{ fontSize: 12, color: textColor, opacity: 0.8 }} numberOfLines={2}>{item.description}</ThemedText>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
                       <ThemedText style={{ fontSize: 12, color: textColor, marginRight: 10 }}>Cuisine: <ThemedText style={{ fontWeight: '600', fontSize: 12 }}>{cuisineName}</ThemedText></ThemedText>
-                      <ThemedText style={{ fontSize: 12, color: textColor, marginRight: 10 }}>Price: <ThemedText style={{ fontWeight: '600', fontSize: 12 }}>৳{item.price}</ThemedText></ThemedText>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 10 }}>
+                        <ThemedText style={{ fontSize: 12, color: textColor }}>Price: </ThemedText>
+                        {item.discount && new Date(item.discount.validUntil) > new Date() ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <ThemedText style={{ fontSize: 12, color: textColor, textDecorationLine: 'line-through', opacity: 0.6 }}>৳{item.price}</ThemedText>
+                            <ThemedText style={{ fontSize: 12, fontWeight: '600', color: '#ff6b35', marginLeft: 4 }}>৳{Math.round(item.price * (1 - item.discount.percentage / 100))}</ThemedText>
+                            <ThemedText style={{ fontSize: 10, color: '#ff6b35', marginLeft: 4 }}>({item.discount.percentage}% off)</ThemedText>
+                          </View>
+                        ) : (
+                          <ThemedText style={{ fontWeight: '600', fontSize: 12 }}>৳{item.price}</ThemedText>
+                        )}
+                      </View>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
                       <View style={{
@@ -280,6 +384,32 @@ export default function MenuScreen() {
                       }}>
                         <ThemedText style={{ fontSize: 11, color: availableColor, fontWeight: '700' }}>{item.available ? 'Available' : 'Not Available'}</ThemedText>
                       </View>
+                      {item.discount ? (
+                        <View
+                          style={{
+                            backgroundColor: new Date(item.discount.validUntil) > new Date()
+                              ? (colorScheme === 'light' ? '#fff0e8' : '#402a21')
+                              : (colorScheme === 'light' ? '#f1f5f9' : '#1f2937'),
+                            borderRadius: 999,
+                            paddingHorizontal: 10,
+                            paddingVertical: 2,
+                            alignSelf: 'flex-start',
+                            marginRight: 6,
+                            borderWidth: 1,
+                            borderColor: new Date(item.discount.validUntil) > new Date() ? '#ff6b35' : (colorScheme === 'light' ? '#e2e8f0' : '#374151'),
+                          }}
+                        >
+                          {new Date(item.discount.validUntil) > new Date() ? (
+                            <ThemedText style={{ fontSize: 11, color: '#ff6b35', fontWeight: '700' }}>
+                              {item.discount.percentage}% off • until {new Date(item.discount.validUntil).toLocaleDateString()} {new Date(item.discount.validUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </ThemedText>
+                          ) : (
+                            <ThemedText style={{ fontSize: 11, color: textColor, opacity: 0.8, fontWeight: '700' }}>
+                              Discount expired ({item.discount.percentage}%)
+                            </ThemedText>
+                          )}
+                        </View>
+                      ) : null}
                     </View>
                   </View>
                   <TouchableOpacity
@@ -456,6 +586,217 @@ export default function MenuScreen() {
             </View>
           </View>
         </Modal>
+
+        {/* Discount Modal */}
+        <Modal
+          visible={discountModalVisible}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setDiscountModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContainer, { backgroundColor: cardBg, maxHeight: '85%' }]}>
+              <View style={styles.modalHeader}>
+                <ThemedText type="title" style={{ fontSize: 20, fontWeight: '700' }}>Add Discount</ThemedText>
+                <TouchableOpacity onPress={() => setDiscountModalVisible(false)} style={styles.closeBtn}>
+                  <Ionicons name="close" size={22} color={iconColor} />
+                </TouchableOpacity>
+              </View>
+              
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 20 }}>
+                {/* Discount Details */}
+                <ThemedText style={[styles.label, { color: textColor }]}>Discount Percentage (%) *</ThemedText>
+                <TextInput
+                  value={discountPercentage}
+                  onChangeText={text => setDiscountPercentage(text.replace(/[^0-9]/g, ''))}
+                  placeholder="Enter discount percentage (1-100)"
+                  placeholderTextColor={colorScheme === 'light' ? '#aaa' : '#666'}
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: cardBg,
+                      borderColor: colorScheme === 'light' ? '#e0e0e0' : '#333',
+                      color: textColor,
+                    },
+                  ]}
+                  keyboardType="numeric"
+                  maxLength={3}
+                />
+
+                <ThemedText style={[styles.label, { color: textColor }]}>Valid Until *</ThemedText>
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+                  <TouchableOpacity
+                    style={[
+                      styles.datePickerButton,
+                      {
+                        backgroundColor: cardBg,
+                        borderColor: colorScheme === 'light' ? '#e0e0e0' : '#333',
+                        flex: 1,
+                      },
+                    ]}
+                    onPress={() => setShowDatePicker(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="calendar-outline" size={18} color={primary} style={{ marginRight: 8 }} />
+                    <ThemedText style={{ color: textColor, fontSize: 14 }}>
+                      {discountValidUntil.toLocaleDateString()}
+                    </ThemedText>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[
+                      styles.datePickerButton,
+                      {
+                        backgroundColor: cardBg,
+                        borderColor: colorScheme === 'light' ? '#e0e0e0' : '#333',
+                        flex: 1,
+                      },
+                    ]}
+                    onPress={() => setShowTimePicker(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="time-outline" size={18} color={primary} style={{ marginRight: 8 }} />
+                    <ThemedText style={{ color: textColor, fontSize: 14 }}>
+                      {discountValidUntil.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </ThemedText>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Date Picker */}
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={discountValidUntil}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    minimumDate={new Date()}
+                    onChange={(event, selectedDate) => {
+                      setShowDatePicker(false);
+                      if (selectedDate) {
+                        const newDate = new Date(discountValidUntil);
+                        newDate.setFullYear(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+                        setDiscountValidUntil(newDate);
+                      }
+                    }}
+                  />
+                )}
+
+                {/* Time Picker */}
+                {showTimePicker && (
+                  <DateTimePicker
+                    value={discountValidUntil}
+                    mode="time"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={(event, selectedTime) => {
+                      setShowTimePicker(false);
+                      if (selectedTime) {
+                        const newDate = new Date(discountValidUntil);
+                        newDate.setHours(selectedTime.getHours(), selectedTime.getMinutes(), 0, 0);
+                        setDiscountValidUntil(newDate);
+                      }
+                    }}
+                  />
+                )}
+
+                {/* Food Items Selection */}
+                <ThemedText style={[styles.label, { color: textColor, marginTop: 20 }]}>Select Food Items *</ThemedText>
+                <ThemedText style={{ fontSize: 12, color: textColor, opacity: 0.7, marginBottom: 12 }}>
+                  Choose the food items you want to apply the discount to:
+                </ThemedText>
+                
+                {menuItems.map(item => {
+                  const isSelected = selectedItems.includes(item._id);
+                  const cuisineName = config.cuisines.find(c => c._id === item.cuisine)?.name || 'Unknown';
+                  
+                  return (
+                    <TouchableOpacity
+                      key={item._id}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: isSelected ? (colorScheme === 'light' ? '#e3f2fd' : '#1a237e') : cardBg,
+                        borderRadius: 12,
+                        padding: 12,
+                        marginBottom: 8,
+                        borderWidth: 1,
+                        borderColor: isSelected ? primary : (colorScheme === 'light' ? '#e0e0e0' : '#333'),
+                      }}
+                      onPress={() => toggleItemSelection(item._id)}
+                      activeOpacity={0.7}
+                    >
+                      <Image
+                        source={item.image ? { uri: item.image } : require('@/assets/images/partial-react-logo.png')}
+                        style={{ width: 40, height: 40, borderRadius: 8, backgroundColor: '#eee' }}
+                      />
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <ThemedText style={{ fontSize: 14, fontWeight: '600', color: textColor }} numberOfLines={1}>
+                          {item.name}
+                        </ThemedText>
+                        <ThemedText style={{ fontSize: 12, color: textColor, opacity: 0.7 }}>
+                          {cuisineName} • ৳{item.price}
+                        </ThemedText>
+                        {item.discount ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                            {new Date(item.discount.validUntil) > new Date() ? (
+                              <>
+                                <ThemedText style={{ fontSize: 11, color: '#ff6b35', fontWeight: '700' }}>
+                                  {item.discount.percentage}% off
+                                </ThemedText>
+                                <ThemedText style={{ fontSize: 11, color: textColor, opacity: 0.7, marginLeft: 6 }}>
+                                  until {new Date(item.discount.validUntil).toLocaleDateString()} {new Date(item.discount.validUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </ThemedText>
+                              </>
+                            ) : (
+                              <ThemedText style={{ fontSize: 11, color: textColor, opacity: 0.7 }}>
+                                Discount expired ({item.discount.percentage}%)
+                              </ThemedText>
+                            )}
+                          </View>
+                        ) : null}
+                      </View>
+                      <View style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: 10,
+                        borderWidth: 2,
+                        borderColor: isSelected ? primary : '#ccc',
+                        backgroundColor: isSelected ? primary : 'transparent',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}>
+                        {isSelected && (
+                          <Ionicons name="checkmark" size={12} color={colorScheme === 'light' ? '#fff' : '#18181b'} />
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              {/* Footer */}
+              <View style={styles.modalFooter}>
+                <TouchableOpacity
+                  onPress={() => setDiscountModalVisible(false)}
+                  style={styles.cancelBtn}
+                  activeOpacity={0.7}
+                >
+                  <ThemedText style={{ color: iconColor, fontWeight: '600', fontSize: 16 }}>Cancel</ThemedText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleDiscountSubmit}
+                  style={[{ backgroundColor: '#ff6b35', borderRadius: 8, paddingVertical: 12, paddingHorizontal: 26, alignItems: 'center', justifyContent: 'center' }, sendingDiscount && { backgroundColor: '#ccc' }]}
+                  activeOpacity={0.7}
+                  disabled={sendingDiscount}
+                >
+                  {sendingDiscount ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <ThemedText style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Apply</ThemedText>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </ThemedView>
     </SafeAreaView>
   );
@@ -550,6 +891,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  datePickerButton: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -6,10 +6,9 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import axios from 'axios';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React from "react";
-import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const AVATAR_SIZE = 96;
@@ -22,19 +21,14 @@ export default function ProfileProp() {
   const cardBg = Colors[colorScheme].background;
   const textColor = Colors[colorScheme].text;
   const iconColor = Colors[colorScheme].icon;
+  const theme = Colors[colorScheme];
   const router = useRouter();
 
-  // const heroBg = colorScheme === 'light' ? '#ffe6eb' : '#18181b';
-  const cardOverlayBg = colorScheme === 'light' ? 'rgba(255,255,255,0.98)' : 'rgba(30,30,32,0.98)';
-  const avatarBorder = colorScheme === 'light' ? '#fff' : '#232323';
-  const dividerColor = colorScheme === 'light' ? '#eee' : '#232323';
-  const infoLabelColor = colorScheme === 'light' ? '#888' : '#aaa';
-  const infoValueColor = colorScheme === 'light' ? '#222' : '#ececec';
-  const heroNameColor = colorScheme === 'light' ? '#222' : '#ececec';
-  const heroSubtitleColor = colorScheme === 'light' ? '#888' : '#aaa';
   const buttonTextColor = colorScheme === 'light' ? '#fff' : '#18181b';
   const cancelButtonBg = colorScheme === 'light' ? 'transparent' : '#2a2a2a';
   const cancelButtonBorder = colorScheme === 'light' ? '#ddd' : '#444';
+  const infoLabelColor = colorScheme === 'light' ? '#888' : '#aaa';
+  const dividerColor = colorScheme === 'light' ? '#eee' : '#232323';
 
   // Config state for institutes
   const [config, setConfig] = React.useState<{ institutes: { _id: string; name: string }[] }>({ institutes: [] });
@@ -158,170 +152,157 @@ export default function ProfileProp() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: cardBg }}>
       <ScrollView contentContainerStyle={{ flexGrow: 1, padding: 0 }}>
-        {/* Hero Section */}
-        <LinearGradient
-          colors={colorScheme === 'light' ? ['#ffe6eb', '#fff'] : ['#18181b', '#232323']}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={[styles.hero, { backgroundColor: undefined }]}
-        >
-          <View style={[styles.avatarWrapper, { borderColor: avatarBorder, backgroundColor: cardBg, position: 'absolute', top: 38, zIndex: 10, alignSelf: 'center', shadowOpacity: 0.18, shadowRadius: 16, elevation: 8 }]}>
-            <Ionicons name="person-circle" size={AVATAR_SIZE} color={primary} style={{ backgroundColor: 'transparent' }} />
+        {/* Modern Hero Section */}
+        <View style={[styles.modernHero, { backgroundColor: theme.background }]}>
+          {/* Avatar */}
+          <View style={[styles.modernAvatar, { backgroundColor: colorScheme === 'light' ? '#f8f9fa' : '#1a1a1a' }]}>
+            <Ionicons name="person" size={48} color={primary} />
           </View>
-          <View style={{ height: AVATAR_SIZE / 2 + 20 }} />
-          <ThemedText type="title" style={[styles.heroName, { color: heroNameColor, marginTop: AVATAR_SIZE, fontSize: 26, fontWeight: '800' }]}>{user?.name || 'User'}</ThemedText>
-          <ThemedText type="subtitle" style={[styles.heroSubtitle, { color: heroSubtitleColor, fontSize: 16 }]}>{user?.email}</ThemedText>
+          
+          {/* User Info */}
+          <View style={styles.userInfo}>
+            <Text style={[styles.modernName, { color: theme.text }]}>{user?.name || 'User'}</Text>
+            <Text style={[styles.modernEmail, { color: theme.tabIconDefault }]}>{user?.email}</Text>
+          </View>
 
-
-
-          {/* Balance and Request Topup Buttons */}
-          <View style={{ marginTop: 20, marginHorizontal: 20, flexDirection: 'row', gap: 12 }}>
-            {/* Balance Button */}
-            <View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: '#d32f2f',
-              paddingHorizontal: 16,
-              paddingVertical: 10,
-              borderRadius: 12,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.15,
-              shadowRadius: 4,
-              elevation: 4,
-              borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.2)',
-              flex: 1,
-            }}>
-              {showCredit ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                  <Ionicons
-                    name="wallet-outline"
-                    size={16}
-                    color={'#fff'}
-                    style={{ marginRight: 8 }}
-                  />
-                  <ThemedText type="title" style={{ fontSize: 15, fontWeight: '900', color: '#fff' }}>
-                    ৳ {creditBalance || 0}
-                  </ThemedText>
-                </View>
-              ) : (
+          {/* Quick Actions */}
+          <View style={styles.quickActions}>
+            {/* Balance Card */}
                 <TouchableOpacity
                   onPress={fetchCreditBalance}
                   disabled={creditLoading}
-                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}
-                >
-                  <Ionicons
-                    name="wallet-outline"
-                    size={16}
-                    color={'#fff'}
-                    style={{ marginRight: 8 }}
-                  />
-                  <ThemedText type="title" style={{ fontSize: 15, fontWeight: 'bold', color: '#fff', textAlign: 'center' }}>
-                    {!creditLoading && 'Balance'}
-                  </ThemedText>
-                  {creditLoading && (
-                    <ActivityIndicator size="small" color={'#fff'} />
+              style={[styles.balanceCard, { 
+                backgroundColor: colorScheme === 'light' ? '#fff' : '#1a1a1a',
+                borderColor: colorScheme === 'light' ? '#e5e7eb' : '#374151'
+              }]}
+              activeOpacity={0.7}
+            >
+              <View style={styles.balanceHeader}>
+                <Ionicons name="wallet-outline" size={20} color={primary} />
+                <Text style={[styles.balanceLabel, { color: theme.tabIconDefault }]}>Balance</Text>
+              </View>
+              {showCredit ? (
+                <Text style={[styles.balanceAmount, { color: primary }]}>৳{creditBalance || 0}</Text>
+              ) : (
+                <View style={styles.balanceContent}>
+                  {creditLoading ? (
+                    <ActivityIndicator size="small" color={primary} />
+                  ) : (
+                    <Text style={[styles.balanceTap, { color: theme.tabIconDefault }]}>Tap to view</Text>
+                  )}
+                </View>
                   )}
                 </TouchableOpacity>
-              )}
-            </View>
 
-            {/* Request Topup Button */}
+            {/* Topup Button */}
             <TouchableOpacity
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: '#9C27B0',
-                paddingHorizontal: 16,
-                paddingVertical: 10,
-                borderRadius: 12,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.15,
-                shadowRadius: 4,
-                elevation: 4,
-                borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.2)',
-                flex: 1,
-              }}
+              style={[styles.topupCard, { backgroundColor: primary }]}
               onPress={() => {
                 const data = { userId: user?.id, topup: true };
                 const encodedData = encodeURIComponent(JSON.stringify(data));
                 router.push({ pathname: '/qrtaka', params: { data: encodedData } });
               }}
-              activeOpacity={0.85}
-            >
-              <Ionicons
-                name="add-circle-outline"
-                size={16}
-                color={'#fff'}
-                style={{ marginRight: 8 }}
-              />
-              <ThemedText type="title" style={{ fontSize: 15, fontWeight: 'bold', color: '#fff', textAlign: 'center' }}>
-                Request Topup
-              </ThemedText>
-            </TouchableOpacity>
-          </View>
-        </LinearGradient>
-
-        {/* Card Overlay */}
-        <ThemedView style={[styles.cardOverlay, { backgroundColor: cardOverlayBg, marginTop: AVATAR_SIZE / 2 - 60, padding: 32, shadowOpacity: 0.16, shadowRadius: 24, elevation: 10 }]}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <ThemedText type="subtitle" style={styles.sectionHeader}>Account Details</ThemedText>
-            <TouchableOpacity
-              style={[styles.editButton, { backgroundColor: primary }]}
-              onPress={() => setIsModalVisible(true)}
               activeOpacity={0.8}
             >
-              <Ionicons name="create-outline" size={16} color={buttonTextColor} />
-              <ThemedText style={{ color: buttonTextColor, fontSize: 12, fontWeight: '600', marginLeft: 4 }}>Edit</ThemedText>
+              <Ionicons name="add" size={20} color={buttonTextColor} />
+              <Text style={[styles.topupText, { color: buttonTextColor }]}>Top Up</Text>
             </TouchableOpacity>
           </View>
-          <View style={[styles.divider, { backgroundColor: dividerColor }]} />
-          <View style={styles.infoRow}>
-            <Ionicons name="call-outline" size={20} color={iconColor} style={styles.icon} />
-            <ThemedText style={[styles.infoLabel, { color: infoLabelColor, fontSize: 14 }]}>Phone:</ThemedText>
-            <ThemedText style={[styles.infoValue, { color: infoValueColor, fontSize: 14 }]}>{user?.phoneNumber || '-'}</ThemedText>
-          </View>
-          <View style={styles.rowDivider} />
-          <View style={styles.infoRow}>
-            <Ionicons name="school-outline" size={20} color={iconColor} style={styles.icon} />
-            <ThemedText style={[styles.infoLabel, { color: infoLabelColor, fontSize: 14 }]}>Institute:</ThemedText>
-            <ThemedText style={[styles.infoValue, { color: infoValueColor, fontSize: 13 }]}>{configLoading ? '-' : getInstituteName(user?.institute)}</ThemedText>
-          </View>
-          <View style={styles.rowDivider} />
-          <View style={styles.infoRow}>
-            <Ionicons name="id-card-outline" size={20} color={iconColor} style={styles.icon} />
-            <ThemedText style={[styles.infoLabel, { color: infoLabelColor, fontSize: 14 }]}>Student ID:</ThemedText>
-            <ThemedText style={[styles.infoValue, { color: infoValueColor, fontSize: 14 }]}>{user?.studentId || '-'}</ThemedText>
-          </View>
+        </View>
 
-
-          {/* Action Buttons */}
-          <View style={{ marginTop: 24, gap: 16 }}>
-
-
+        {/* Modern Details Section */}
+        <View style={[styles.modernCard, { 
+          backgroundColor: colorScheme === 'light' ? '#fff' : '#1a1a1a',
+          borderColor: colorScheme === 'light' ? '#e5e7eb' : '#374151'
+        }]}>
+          {/* Section Header */}
+          <View style={styles.modernSectionHeader}>
+            <Text style={[styles.modernSectionTitle, { color: theme.text }]}>Personal Information</Text>
             <TouchableOpacity
-              style={[styles.logoutBtn, {
-                backgroundColor: primary,
-                width: '100%',
-                shadowOpacity: 0.2,
-                shadowRadius: 12,
-                elevation: 8,
-                paddingVertical: 16,
-                borderRadius: 16,
+              style={[styles.modernEditButton, { 
+                backgroundColor: colorScheme === 'light' ? '#f3f4f6' : '#374151' 
+              }]}
+              onPress={() => setIsModalVisible(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="pencil" size={16} color={theme.text} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Info Items */}
+          <View style={styles.modernInfoContainer}>
+            <View style={styles.modernInfoItem}>
+              <View style={styles.modernInfoHeader}>
+                <Ionicons name="call" size={16} color={theme.tabIconDefault} />
+                <Text style={[styles.modernInfoLabel, { color: theme.tabIconDefault }]}>Phone</Text>
+              </View>
+              <Text style={[styles.modernInfoValue, { color: theme.text }]}>{user?.phoneNumber || 'Not provided'}</Text>
+            </View>
+
+            <View style={styles.modernInfoItem}>
+              <View style={styles.modernInfoHeader}>
+                <Ionicons name="school" size={16} color={theme.tabIconDefault} />
+                <Text style={[styles.modernInfoLabel, { color: theme.tabIconDefault }]}>Institute</Text>
+              </View>
+              <Text style={[styles.modernInfoValue, { color: theme.text }]}>
+                {configLoading ? 'Loading...' : getInstituteName(user?.institute) || 'Not selected'}
+              </Text>
+            </View>
+
+            <View style={styles.modernInfoItem}>
+              <View style={styles.modernInfoHeader}>
+                <Ionicons name="card" size={16} color={theme.tabIconDefault} />
+                <Text style={[styles.modernInfoLabel, { color: theme.tabIconDefault }]}>Student ID</Text>
+              </View>
+              <Text style={[styles.modernInfoValue, { color: theme.text }]}>{user?.studentId || 'Not provided'}</Text>
+          </View>
+          </View>
+          </View>
+
+
+        {/* Modern Action Buttons */}
+        <View style={styles.modernActionsContainer}>
+          {/* History Button */}
+          <TouchableOpacity
+            style={[styles.modernActionButton, { 
+              backgroundColor: colorScheme === 'light' ? '#fff' : '#1a1a1a',
+              borderColor: colorScheme === 'light' ? '#e5e7eb' : '#374151'
+            }]}
+            onPress={() => router.push('/history')}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.modernActionIcon, { backgroundColor: '#10b981' }]}>
+              <Ionicons name="time" size={18} color="#fff" />
+            </View>
+            <View style={styles.modernActionContent}>
+              <Text style={[styles.modernActionTitle, { color: theme.text }]}>Transaction History</Text>
+              <Text style={[styles.modernActionSubtitle, { color: theme.tabIconDefault }]}>View your loans and topups</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={theme.tabIconDefault} />
+          </TouchableOpacity>
+
+          {/* Logout Button */}
+            <TouchableOpacity
+            style={[styles.modernActionButton, { 
+              backgroundColor: colorScheme === 'light' ? '#fff' : '#1a1a1a',
+              borderColor: colorScheme === 'light' ? '#e5e7eb' : '#374151'
               }]}
               onPress={logout}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="log-out-outline" size={22} color={buttonTextColor} style={{ marginRight: 12 }} />
-              <ThemedText style={{ color: buttonTextColor, fontWeight: '800', fontSize: 16 }}>Logout</ThemedText>
+            activeOpacity={0.7}
+          >
+            <View style={[styles.modernActionIcon, { backgroundColor: '#ef4444' }]}>
+              <Ionicons name="log-out" size={18} color="#fff" />
+            </View>
+            <View style={styles.modernActionContent}>
+              <Text style={[styles.modernActionTitle, { color: theme.text }]}>Sign Out</Text>
+              <Text style={[styles.modernActionSubtitle, { color: theme.tabIconDefault }]}>Logout from your account</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={theme.tabIconDefault} />
             </TouchableOpacity>
           </View>
-        </ThemedView>
+
+        {/* Bottom spacing for navigation bar */}
+        <View style={{ height: 100 }} />
       </ScrollView>
 
       {/* Profile Update Modal */}
@@ -465,137 +446,165 @@ export default function ProfileProp() {
 }
 
 const styles = StyleSheet.create({
-  hero: {
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingTop: 0,
-    paddingBottom: 38,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-    marginBottom: 0,
-    zIndex: 2,
-    minHeight: 220,
-    overflow: 'visible',
+  // Modern Hero Styles
+  modernHero: {
+    paddingTop: 20,
+    paddingHorizontal: 24,
+    paddingBottom: 32,
   },
-  avatarWrapper: {
-    width: AVATAR_SIZE + 8,
-    height: AVATAR_SIZE + 8,
-    borderRadius: (AVATAR_SIZE + 8) / 2,
-    backgroundColor: '#fff',
+  modernAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 0,
-    borderWidth: 4,
-    borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    elevation: 8,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
   },
-  heroName: {
-    fontSize: 26,
-    fontWeight: '800',
-    marginTop: 0,
+  userInfo: {
+    marginBottom: 32,
   },
-  heroSubtitle: {
+  modernName: {
+    fontSize: 28,
+    fontWeight: '700',
+    marginBottom: 4,
+    letterSpacing: -0.5,
+  },
+  modernEmail: {
     fontSize: 16,
-    marginTop: 2,
-    marginBottom: 0,
     fontWeight: '400',
   },
-  cardOverlay: {
-    marginTop: -AVATAR_SIZE / 2 + 38,
-    marginHorizontal: 12,
-    borderRadius: 26,
-    padding: 32,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.16,
-    shadowRadius: 24,
-    elevation: 10,
-    zIndex: 3,
+  
+  // Quick Actions Styles
+  quickActions: {
+    flexDirection: 'row',
+    gap: 16,
   },
-  sectionHeader: {
-    fontWeight: '800',
-    marginBottom: 16,
-    color: '#DC143C',
-    fontSize: 20,
-    letterSpacing: 0.2,
+  balanceCard: {
+    flex: 2,
+    padding: 20,
+    borderRadius: 16,
+    borderWidth: 1,
   },
-  editButton: {
+  balanceHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    marginBottom: 12,
   },
-  divider: {
-    height: 1,
-    backgroundColor: '#eee',
-    marginBottom: 18,
-    marginTop: 2,
-    opacity: 0.7,
+  balanceLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 8,
   },
-  rowDivider: {
-    height: 1,
-    backgroundColor: '#eee',
-    opacity: 0.3,
-    marginVertical: 6,
-    marginLeft: 36,
-    borderRadius: 2,
+  balanceAmount: {
+    fontSize: 24,
+    fontWeight: '700',
   },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 0,
-    paddingVertical: 10,
+  balanceContent: {
+    minHeight: 32,
+    justifyContent: 'center',
   },
-  infoLabel: {
-    fontWeight: '600',
-    fontSize: 16,
-    marginRight: 8,
-    color: '#888',
-    minWidth: 100,
+  balanceTap: {
+    fontSize: 14,
+    fontWeight: '400',
   },
-  infoValue: {
-    fontSize: 16,
-    color: '#222',
+  topupCard: {
     flex: 1,
+    padding: 20,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  topupText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+
+  // Modern Card Styles
+  modernCard: {
+    marginHorizontal: 24,
+    marginTop: 24,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 24,
+  },
+  modernSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  modernSectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  modernEditButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modernInfoContainer: {
+    gap: 20,
+  },
+  modernInfoItem: {
+    gap: 8,
+  },
+  modernInfoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modernInfoLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  modernInfoValue: {
+    fontSize: 16,
     fontWeight: '500',
   },
-  icon: {
-    marginRight: 10,
+
+  // Modern Actions Styles
+  modernActionsContainer: {
+    marginHorizontal: 24,
+    marginTop: 24,
+    marginBottom: 32,
+    gap: 16,
   },
-  logoutBtn: {
+  modernActionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 14,
-    paddingVertical: 10,
-    marginBottom: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    elevation: 6,
-    width: '100%',
-    alignSelf: 'center',
-    marginTop: 28,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 20,
     borderRadius: 16,
-    paddingVertical: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 6,
+    borderWidth: 1,
   },
-  // Modal styles
+  modernActionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  modernActionContent: {
+    flex: 1,
+    gap: 2,
+  },
+  modernActionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modernActionSubtitle: {
+    fontSize: 14,
+    fontWeight: '400',
+  },
+
+  // Modal styles (keeping modern but simplified)
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',

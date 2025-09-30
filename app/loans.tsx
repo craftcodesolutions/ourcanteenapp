@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
@@ -13,6 +12,7 @@ import {
   FlatList,
   TextInput
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
@@ -52,19 +52,46 @@ interface LoanStats {
   total: { count: number; totalAmount: number };
 }
 
+interface GroupedLoans {
+  userId: string;
+  customerInfo: {
+    name: string;
+    phoneNumber: string;
+    email: string;
+    studentId?: string;
+  };
+  loans: Loan[];
+  totalActive: number;
+  totalActiveAmount: number;
+  totalPaid: number;
+  totalPaidAmount: number;
+  totalCancelled: number;
+  totalCancelledAmount: number;
+}
+
 export default function LoansScreen() {
   const [loans, setLoans] = useState<Loan[]>([]);
+  const [groupedLoans, setGroupedLoans] = useState<GroupedLoans[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
+  const [viewMode, setViewMode] = useState<'grouped' | 'list'>('grouped');
   const [stats, setStats] = useState<LoanStats | null>(null);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
+  const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
   const [modalVisible, setModalVisible] = useState(false);
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
+  const [paymentMethodModalVisible, setPaymentMethodModalVisible] = useState(false);
+  const [communicationModalVisible, setCommunicationModalVisible] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [notes, setNotes] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('');
+  const [communicationType, setCommunicationType] = useState('');
+  const [communicationNotes, setCommunicationNotes] = useState('');
   const [page, setPage] = useState(1);
+  const [groupedPage, setGroupedPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [groupedHasMore, setGroupedHasMore] = useState(true);
   
   const router = useRouter();
   const { user, token, logout } = useAuth();
@@ -76,6 +103,8 @@ export default function LoansScreen() {
       if (reset) {
         setPage(1);
         setHasMore(true);
+        setLoading(true);
+        setLoans([]); // Clear old data immediately
       }
       
       const statusParam = selectedStatus === 'ALL' ? '' : selectedStatus;
@@ -96,6 +125,7 @@ export default function LoansScreen() {
         } else {
           setLoans(prev => [...prev, ...response.data.loans]);
         }
+        
         setStats(response.data.statistics);
         setHasMore(response.data.pagination.currentPage < response.data.pagination.totalPages);
         if (!reset) {
@@ -116,32 +146,140 @@ export default function LoansScreen() {
     }
   };
 
+  const fetchGroupedLoans = async (reset = false) => {
+    try {
+      if (reset) {
+        setGroupedPage(1);
+        setGroupedHasMore(true);
+        setLoading(true);
+        setGroupedLoans([]); // Clear old data immediately
+      }
+      
+      const statusParam = selectedStatus === 'ALL' ? '' : selectedStatus;
+      const currentPage = reset ? 1 : groupedPage;
+      
+      const response = await axios.get(
+        `https://ourcanteennbackend.vercel.app/api/owner/loans-grouped?status=${statusParam}&page=${currentPage}&limit=20`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.data.success) {
+        if (reset) {
+          setGroupedLoans(response.data.groupedLoans);
+        } else {
+          setGroupedLoans(prev => [...prev, ...response.data.groupedLoans]);
+        }
+        
+        setStats(response.data.statistics);
+        setGroupedHasMore(response.data.pagination.hasMore);
+        if (!reset) {
+          setGroupedPage(prev => prev + 1);
+        }
+      }
+    } catch (err: any) {
+      if (err.response?.status === 403) {
+        logout();
+        router.push("/(auth)/signin");
+      } else {
+        console.error('Error fetching grouped loans:', err);
+        Alert.alert('Error', 'Failed to fetch grouped loans');
+      }
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
   const onRefresh = () => {
     setRefreshing(true);
-    fetchLoans(true);
+    if (viewMode === 'grouped') {
+      fetchGroupedLoans(true);
+    } else {
+      fetchLoans(true);
+    }
   };
 
   const loadMore = () => {
-    if (!loading && hasMore) {
+    if (loading) return;
+    
+    if (viewMode === 'grouped' && groupedHasMore) {
+      setLoading(true);
+      fetchGroupedLoans(false);
+    } else if (viewMode === 'list' && hasMore) {
+      setLoading(true);
       fetchLoans(false);
     }
   };
 
+  const toggleUserExpansion = (userId: string) => {
+    setExpandedUsers(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(userId)) {
+        newSet.delete(userId);
+      } else {
+        newSet.add(userId);
+      }
+      return newSet;
+    });
+  };
+
+  const expandAllUsers = () => {
+    setExpandedUsers(new Set(groupedLoans.map(group => group.userId)));
+  };
+
+  const collapseAllUsers = () => {
+    setExpandedUsers(new Set());
+  };
+
   useEffect(() => {
-    fetchLoans(true);
-  }, [selectedStatus]);
+    // Clear all data immediately when changing filters or view mode
+    setLoans([]);
+    setGroupedLoans([]);
+    setStats(null);
+    setLoading(true);
+    
+    if (viewMode === 'grouped') {
+      fetchGroupedLoans(true);
+    } else {
+      fetchLoans(true);
+    }
+  }, [selectedStatus, viewMode]);
 
   const handleUpdateLoan = async (status: 'PAID' | 'CANCELLED') => {
     if (!selectedLoan) return;
     
+    // Check if trying to cancel loan within 1 hour of issue
+    if (status === 'CANCELLED') {
+      const loanCreatedTime = new Date(selectedLoan.createdAt).getTime();
+      const currentTime = new Date().getTime();
+      const timeDifferenceHours = (currentTime - loanCreatedTime) / (1000 * 60 * 60);
+      
+      if (timeDifferenceHours < 1) {
+        Alert.alert(
+          'Cannot Cancel Loan',
+          `Loans cannot be cancelled within 1 hour of being issued. This loan was created ${Math.round(timeDifferenceHours * 60)} minutes ago.`,
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+    }
+    
     setUpdating(true);
     try {
+      const finalNotes = status === 'PAID' && paymentMethod 
+        ? `Payment Method: ${paymentMethod}${notes.trim() ? ` - ${notes.trim()}` : ''}`
+        : notes.trim();
+
       const response = await axios.put(
         'https://ourcanteennbackend.vercel.app/api/owner/loans',
         {
           loanId: selectedLoan._id,
           status: status,
-          notes: notes.trim() || undefined
+          notes: finalNotes || undefined
         },
         {
           headers: {
@@ -154,9 +292,16 @@ export default function LoansScreen() {
       if (response.data.success) {
         Alert.alert('Success', `Loan marked as ${status.toLowerCase()}`);
         setUpdateModalVisible(false);
+        setPaymentMethodModalVisible(false);
         setSelectedLoan(null);
         setNotes('');
-        fetchLoans(true);
+        setPaymentMethod('');
+        // Refresh data based on current view mode
+        if (viewMode === 'grouped') {
+          fetchGroupedLoans(true);
+        } else {
+          fetchLoans(true);
+        }
       }
     } catch (err: any) {
       if (err.response?.status === 403) {
@@ -167,6 +312,54 @@ export default function LoansScreen() {
       }
     }
     setUpdating(false);
+  };
+
+  const handleCommunicationLog = async () => {
+    if (!selectedLoan || !communicationType || !communicationNotes.trim()) {
+      Alert.alert('Error', 'Please fill in all communication details');
+      return;
+    }
+
+    try {
+      const logNote = `[${new Date().toLocaleString()}] ${communicationType}: ${communicationNotes.trim()} - by ${user?.name || 'Staff'}`;
+      
+      // Add communication log to loan notes
+      const currentNotes = selectedLoan.notes || '';
+      const updatedNotes = currentNotes 
+        ? `${currentNotes}\n\n${logNote}`
+        : logNote;
+
+      const response = await axios.put(
+        'https://ourcanteennbackend.vercel.app/api/owner/loans',
+        {
+          loanId: selectedLoan._id,
+          status: selectedLoan.status, // Keep same status
+          notes: updatedNotes
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.data.success) {
+        Alert.alert('Success', 'Communication logged successfully');
+        setCommunicationModalVisible(false);
+        setCommunicationType('');
+        setCommunicationNotes('');
+        setSelectedLoan({ ...selectedLoan, notes: updatedNotes });
+        // Refresh data based on current view mode
+        if (viewMode === 'grouped') {
+          fetchGroupedLoans(true);
+        } else {
+          fetchLoans(true);
+        }
+      }
+    } catch (err: any) {
+      Alert.alert('Error', 'Failed to log communication');
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -188,6 +381,122 @@ export default function LoansScreen() {
   };
 
   const renderLoanItem = ({ item }: { item: Loan }) => (
+    <TouchableOpacity
+      style={[styles.loanCard, { 
+        backgroundColor: colorScheme === 'light' ? '#fff' : '#1a1a1a',
+        borderColor: colorScheme === 'light' ? '#e0e0e0' : '#333',
+        marginLeft: 20, // Indent for grouped view
+      }]}
+      onPress={() => {
+        setSelectedLoan(item);
+        setModalVisible(true);
+      }}
+    >
+      <View style={styles.loanHeader}>
+        <View style={styles.loanInfo}>
+          <Text style={[styles.orderId, { color: theme.tabIconDefault }]}>
+            Order #{item.orderId.slice(-8).toUpperCase()}
+          </Text>
+          <Text style={[styles.loanDate, { color: theme.tabIconDefault }]}>
+            {new Date(item.approvedAt).toLocaleDateString()}
+          </Text>
+        </View>
+        <View style={styles.statusBadge}>
+          <MaterialIcons 
+            name={getStatusIcon(item.status) as any} 
+            size={16} 
+            color={getStatusColor(item.status)} 
+          />
+          <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+            {item.status}
+          </Text>
+        </View>
+      </View>
+      
+      <View style={styles.loanFooter}>
+        <Text style={[styles.loanAmount, { color: '#ff6b35' }]}>
+          ৳{item.loanAmount.toFixed(2)}
+        </Text>
+        <MaterialIcons name="chevron-right" size={20} color={theme.tabIconDefault} />
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderUserGroup = ({ item }: { item: GroupedLoans }) => {
+    const isExpanded = expandedUsers.has(item.userId);
+    
+    return (
+      <View style={styles.userGroupContainer}>
+        <TouchableOpacity
+          style={[styles.userGroupHeader, { 
+            backgroundColor: colorScheme === 'light' ? '#f8f9fa' : '#2a2a2a',
+            borderColor: colorScheme === 'light' ? '#e0e0e0' : '#333'
+          }]}
+          onPress={() => toggleUserExpansion(item.userId)}
+        >
+          <View style={styles.userGroupInfo}>
+            <View style={styles.userBasicInfo}>
+              <Text style={[styles.customerName, { color: theme.text }]}>
+                {item.customerInfo.name || 'Unknown Customer'}
+              </Text>
+              <Text style={[styles.customerContact, { color: theme.tabIconDefault }]}>
+                {item.customerInfo.phoneNumber || 'No phone'}
+              </Text>
+              {item.customerInfo.studentId && (
+                <Text style={[styles.studentId, { color: theme.tabIconDefault }]}>
+                  ID: {item.customerInfo.studentId}
+                </Text>
+              )}
+            </View>
+            
+            <View style={styles.userStats}>
+              {item.totalActive > 0 && (
+                <View style={[styles.statBadge, { backgroundColor: '#ff6b35' }]}>
+                  <Text style={styles.statBadgeText}>
+                    {item.totalActive} Active (৳{item.totalActiveAmount.toFixed(0)})
+                  </Text>
+                </View>
+              )}
+              {item.totalPaid > 0 && (
+                <View style={[styles.statBadge, { backgroundColor: '#4CAF50' }]}>
+                  <Text style={styles.statBadgeText}>
+                    {item.totalPaid} Paid (৳{item.totalPaidAmount.toFixed(0)})
+                  </Text>
+                </View>
+              )}
+              {item.totalCancelled > 0 && (
+                <View style={[styles.statBadge, { backgroundColor: '#f44336' }]}>
+                  <Text style={styles.statBadgeText}>
+                    {item.totalCancelled} Cancelled
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+          
+          <MaterialIcons 
+            name={isExpanded ? 'expand-less' : 'expand-more'} 
+            size={24} 
+            color={theme.tabIconDefault} 
+          />
+        </TouchableOpacity>
+        
+        {isExpanded && (
+          <View style={styles.userLoansContainer}>
+            {item.loans
+              .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+              .map((loan) => (
+                <View key={`${item.userId}-${loan._id}`}>
+                  {renderLoanItem({ item: loan })}
+                </View>
+              ))}
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  const renderOriginalLoanItem = ({ item }: { item: Loan }) => (
     <TouchableOpacity
       style={[styles.loanCard, { 
         backgroundColor: colorScheme === 'light' ? '#fff' : '#1a1a1a',
@@ -261,16 +570,6 @@ export default function LoansScreen() {
     </View>
   );
 
-  if (loading && loans.length === 0) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#8e24aa" />
-          <Text style={[styles.loadingText, { color: theme.text }]}>Loading loans...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
@@ -287,16 +586,93 @@ export default function LoansScreen() {
       </View>
 
       {/* Statistics */}
-      {stats && (
-        <View style={styles.statsContainer}>
+      <View style={styles.statsContainer}>
+        {stats ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <StatCard title="Total" count={stats.total.count} amount={stats.total.totalAmount} color="#8e24aa" />
             <StatCard title="Active" count={stats.active.count} amount={stats.active.totalAmount} color="#ff6b35" />
             <StatCard title="Paid" count={stats.paid.count} amount={stats.paid.totalAmount} color="#4CAF50" />
             <StatCard title="Cancelled" count={stats.cancelled.count} amount={stats.cancelled.totalAmount} color="#f44336" />
           </ScrollView>
+        ) : (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={[styles.statCard, { 
+              backgroundColor: colorScheme === 'light' ? '#fff' : '#1a1a1a',
+              borderColor: colorScheme === 'light' ? '#e0e0e0' : '#333'
+            }]}>
+              <ActivityIndicator size="small" color="#8e24aa" />
+              <Text style={[styles.statTitle, { color: theme.tabIconDefault }]}>Loading...</Text>
+            </View>
+          </ScrollView>
+        )}
+      </View>
+
+      {/* View Mode Toggle */}
+      <View style={styles.viewModeContainer}>
+        <View style={styles.viewModeToggle}>
+          <TouchableOpacity
+            style={[
+              styles.viewModeButton,
+              { 
+                backgroundColor: viewMode === 'grouped' ? '#8e24aa' : 'transparent',
+                borderColor: colorScheme === 'light' ? '#e0e0e0' : '#333'
+              }
+            ]}
+            onPress={() => setViewMode('grouped')}
+          >
+            <MaterialIcons 
+              name="group" 
+              size={16} 
+              color={viewMode === 'grouped' ? '#fff' : theme.text} 
+            />
+            <Text style={[
+              styles.viewModeText,
+              { color: viewMode === 'grouped' ? '#fff' : theme.text }
+            ]}>
+              By User
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.viewModeButton,
+              { 
+                backgroundColor: viewMode === 'list' ? '#8e24aa' : 'transparent',
+                borderColor: colorScheme === 'light' ? '#e0e0e0' : '#333'
+              }
+            ]}
+            onPress={() => setViewMode('list')}
+          >
+            <MaterialIcons 
+              name="list" 
+              size={16} 
+              color={viewMode === 'list' ? '#fff' : theme.text} 
+            />
+            <Text style={[
+              styles.viewModeText,
+              { color: viewMode === 'list' ? '#fff' : theme.text }
+            ]}>
+              List View
+            </Text>
+          </TouchableOpacity>
         </View>
-      )}
+
+        {viewMode === 'grouped' && (
+          <View style={styles.expandCollapseButtons}>
+            <TouchableOpacity
+              style={[styles.expandButton, { borderColor: colorScheme === 'light' ? '#e0e0e0' : '#333' }]}
+              onPress={expandAllUsers}
+            >
+              <Text style={[styles.expandButtonText, { color: theme.text }]}>Expand All</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.expandButton, { borderColor: colorScheme === 'light' ? '#e0e0e0' : '#333' }]}
+              onPress={collapseAllUsers}
+            >
+              <Text style={[styles.expandButtonText, { color: theme.text }]}>Collapse All</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
 
       {/* Filter Tabs */}
       <View style={styles.filterContainer}>
@@ -326,31 +702,70 @@ export default function LoansScreen() {
       </View>
 
       {/* Loans List */}
-      <FlatList
-        data={loans}
-        renderItem={renderLoanItem}
-        keyExtractor={(item) => item._id}
-        contentContainerStyle={styles.listContainer}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        onEndReached={loadMore}
-        onEndReachedThreshold={0.1}
-        ListFooterComponent={
-          loading && loans.length > 0 ? (
-            <ActivityIndicator size="small" color="#8e24aa" style={{ marginVertical: 16 }} />
-          ) : null
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <MaterialIcons name="receipt-long" size={64} color={theme.tabIconDefault} />
-            <Text style={[styles.emptyText, { color: theme.text }]}>No loans found</Text>
-            <Text style={[styles.emptySubtext, { color: theme.tabIconDefault }]}>
-              Loans will appear here when customers request them
-            </Text>
-          </View>
-        }
-      />
+      {loading && (viewMode === 'grouped' ? groupedLoans.length === 0 : loans.length === 0) ? (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#8e24aa" />
+          <Text style={[styles.loadingText, { color: theme.text }]}>
+            Loading {viewMode === 'grouped' ? 'grouped loans' : 'loans'}...
+          </Text>
+        </View>
+      ) : viewMode === 'grouped' ? (
+        <FlatList
+          data={groupedLoans}
+          renderItem={renderUserGroup}
+          keyExtractor={(item) => item.userId}
+          contentContainerStyle={styles.listContainer}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.1}
+          ListFooterComponent={
+            loading && groupedLoans.length > 0 && groupedHasMore ? (
+              <ActivityIndicator size="small" color="#8e24aa" style={{ marginVertical: 16 }} />
+            ) : null
+          }
+          ListEmptyComponent={
+            !loading ? (
+              <View style={styles.emptyContainer}>
+                <MaterialIcons name="group" size={64} color={theme.tabIconDefault} />
+                <Text style={[styles.emptyText, { color: theme.text }]}>No customers with loans found</Text>
+                <Text style={[styles.emptySubtext, { color: theme.tabIconDefault }]}>
+                  Customer loan groups will appear here when loans are created
+                </Text>
+              </View>
+            ) : null
+          }
+        />
+      ) : (
+        <FlatList
+          data={loans}
+          renderItem={renderOriginalLoanItem}
+          keyExtractor={(item) => item._id}
+          contentContainerStyle={styles.listContainer}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.1}
+          ListFooterComponent={
+            loading && loans.length > 0 && hasMore ? (
+              <ActivityIndicator size="small" color="#8e24aa" style={{ marginVertical: 16 }} />
+            ) : null
+          }
+          ListEmptyComponent={
+            !loading ? (
+              <View style={styles.emptyContainer}>
+                <MaterialIcons name="receipt-long" size={64} color={theme.tabIconDefault} />
+                <Text style={[styles.emptyText, { color: theme.text }]}>No loans found</Text>
+                <Text style={[styles.emptySubtext, { color: theme.tabIconDefault }]}>
+                  Loans will appear here when customers request them
+                </Text>
+              </View>
+            ) : null
+          }
+        />
+      )}
 
       {/* Loan Detail Modal */}
       <Modal
@@ -431,34 +846,70 @@ export default function LoansScreen() {
                 </ScrollView>
 
                 {selectedLoan.status === 'ACTIVE' && (
-                  <View style={[styles.modalActions, { 
-                    borderTopColor: colorScheme === 'light' ? '#e0e0e0' : '#333' 
-                  }]}>
-                    <TouchableOpacity
-                      style={[styles.actionButton, { backgroundColor: '#4CAF50' }]}
-                      onPress={() => {
-                        setModalVisible(false);
-                        setUpdateModalVisible(true);
-                      }}
-                    >
-                      <Text style={styles.actionButtonText}>Mark as Paid</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.actionButton, { backgroundColor: '#f44336' }]}
-                      onPress={() => {
-                        Alert.alert(
-                          'Cancel Loan',
-                          'Are you sure you want to cancel this loan?',
-                          [
-                            { text: 'No', style: 'cancel' },
-                            { text: 'Yes', onPress: () => handleUpdateLoan('CANCELLED') }
-                          ]
-                        );
-                      }}
-                    >
-                      <Text style={styles.actionButtonText}>Cancel Loan</Text>
-                    </TouchableOpacity>
-                  </View>
+                  <>
+                    {/* Main Action Buttons */}
+                    <View style={[styles.modalActions, { 
+                      borderTopColor: colorScheme === 'light' ? '#e0e0e0' : '#333' 
+                    }]}>
+                      <TouchableOpacity
+                        style={[styles.actionButton, { backgroundColor: '#4CAF50' }]}
+                        onPress={() => {
+                          setModalVisible(false);
+                          setPaymentMethodModalVisible(true);
+                        }}
+                      >
+                        <Text style={styles.actionButtonText}>Mark as Paid</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.actionButton, { backgroundColor: '#f44336' }]}
+                        onPress={() => {
+                          const loanCreatedTime = new Date(selectedLoan.createdAt).getTime();
+                          const currentTime = new Date().getTime();
+                          const timeDifferenceHours = (currentTime - loanCreatedTime) / (1000 * 60 * 60);
+                          
+                          if (timeDifferenceHours < 1) {
+                            Alert.alert(
+                              'Cannot Cancel Loan',
+                              `Loans cannot be cancelled within 1 hour of being issued. This loan was created ${Math.round(timeDifferenceHours * 60)} minutes ago.`,
+                              [{ text: 'OK' }]
+                            );
+                            return;
+                          }
+
+                          Alert.alert(
+                            'Cancel Loan',
+                            'Are you sure you want to cancel this loan?',
+                            [
+                              { text: 'No', style: 'cancel' },
+                              { text: 'Yes', onPress: () => handleUpdateLoan('CANCELLED') }
+                            ]
+                          );
+                        }}
+                      >
+                        <Text style={styles.actionButtonText}>Cancel Loan</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Communication Actions */}
+                    <View style={[styles.communicationActions, { 
+                      borderTopColor: colorScheme === 'light' ? '#e0e0e0' : '#333' 
+                    }]}>
+                      <TouchableOpacity
+                        style={[styles.communicationButton, { 
+                          backgroundColor: colorScheme === 'light' ? '#f8f9fa' : '#2a2a2a',
+                          borderColor: colorScheme === 'light' ? '#dee2e6' : '#495057'
+                        }]}
+                        onPress={() => {
+                          setModalVisible(false);
+                          setCommunicationModalVisible(true);
+                        }}
+                      >
+                        <Text style={[styles.communicationButtonText, { color: theme.text }]}>
+                          📞 Log Communication
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
                 )}
               </>
             )}
@@ -466,21 +917,45 @@ export default function LoansScreen() {
         </View>
       </Modal>
 
-      {/* Update Modal */}
+      {/* Payment Method Selection Modal */}
       <Modal
-        visible={updateModalVisible}
+        visible={paymentMethodModalVisible}
         animationType="fade"
         transparent={true}
-        onRequestClose={() => setUpdateModalVisible(false)}
+        onRequestClose={() => setPaymentMethodModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.updateModalContainer, { 
             backgroundColor: colorScheme === 'light' ? '#fff' : '#1a1a1a' 
           }]}>
-            <Text style={[styles.updateModalTitle, { color: theme.text }]}>Mark Loan as Paid</Text>
+            <Text style={[styles.updateModalTitle, { color: theme.text }]}>Payment Collection</Text>
             <Text style={[styles.updateModalSubtitle, { color: theme.tabIconDefault }]}>
-              Add optional notes about the payment
+              Select how the payment was collected
             </Text>
+            
+            {/* Payment Method Selection */}
+            <View style={styles.paymentMethodContainer}>
+              {['Cash at Restaurant', 'Mobile Banking (bKash/Nagad)', 'Credit Top-up Adjustment', 'Bank Transfer', 'Other'].map((method) => (
+                <TouchableOpacity
+                  key={method}
+                  style={[
+                    styles.paymentMethodOption,
+                    { 
+                      backgroundColor: paymentMethod === method ? '#8e24aa' : 'transparent',
+                      borderColor: colorScheme === 'light' ? '#e0e0e0' : '#444'
+                    }
+                  ]}
+                  onPress={() => setPaymentMethod(method)}
+                >
+                  <Text style={[
+                    styles.paymentMethodText,
+                    { color: paymentMethod === method ? '#fff' : theme.text }
+                  ]}>
+                    {method}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
             
             <TextInput
               style={[styles.notesInput, { 
@@ -488,7 +963,7 @@ export default function LoansScreen() {
                 borderColor: colorScheme === 'light' ? '#e0e0e0' : '#444',
                 color: theme.text
               }]}
-              placeholder="Payment notes (optional)"
+              placeholder="Additional notes (transaction ID, staff name, etc.)"
               placeholderTextColor={theme.tabIconDefault}
               value={notes}
               onChangeText={setNotes}
@@ -500,20 +975,104 @@ export default function LoansScreen() {
               <TouchableOpacity
                 style={[styles.updateButton, { backgroundColor: '#f44336' }]}
                 onPress={() => {
-                  setUpdateModalVisible(false);
+                  setPaymentMethodModalVisible(false);
+                  setPaymentMethod('');
                   setNotes('');
                 }}
               >
                 <Text style={styles.updateButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.updateButton, { backgroundColor: '#4CAF50', opacity: updating ? 0.7 : 1 }]}
+                style={[styles.updateButton, { 
+                  backgroundColor: '#4CAF50', 
+                  opacity: (updating || !paymentMethod) ? 0.7 : 1 
+                }]}
                 onPress={() => handleUpdateLoan('PAID')}
-                disabled={updating}
+                disabled={updating || !paymentMethod}
               >
                 <Text style={styles.updateButtonText}>
-                  {updating ? 'Updating...' : 'Mark as Paid'}
+                  {updating ? 'Processing...' : 'Confirm Payment'}
                 </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Communication Logging Modal */}
+      <Modal
+        visible={communicationModalVisible}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setCommunicationModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.updateModalContainer, { 
+            backgroundColor: colorScheme === 'light' ? '#fff' : '#1a1a1a' 
+          }]}>
+            <Text style={[styles.updateModalTitle, { color: theme.text }]}>Log Communication</Text>
+            <Text style={[styles.updateModalSubtitle, { color: theme.tabIconDefault }]}>
+              Record customer contact attempt
+            </Text>
+            
+            {/* Communication Type Selection */}
+            <View style={styles.paymentMethodContainer}>
+              {['Phone Call', 'SMS/WhatsApp', 'In-Person Visit', 'Email', 'Family Contact'].map((type) => (
+                <TouchableOpacity
+                  key={type}
+                  style={[
+                    styles.paymentMethodOption,
+                    { 
+                      backgroundColor: communicationType === type ? '#FF9800' : 'transparent',
+                      borderColor: colorScheme === 'light' ? '#e0e0e0' : '#444'
+                    }
+                  ]}
+                  onPress={() => setCommunicationType(type)}
+                >
+                  <Text style={[
+                    styles.paymentMethodText,
+                    { color: communicationType === type ? '#fff' : theme.text }
+                  ]}>
+                    {type}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            
+            <TextInput
+              style={[styles.notesInput, { 
+                backgroundColor: colorScheme === 'light' ? '#f8f9fa' : '#2a2a2a',
+                borderColor: colorScheme === 'light' ? '#e0e0e0' : '#444',
+                color: theme.text
+              }]}
+              placeholder="Communication details (customer response, next steps, etc.)"
+              placeholderTextColor={theme.tabIconDefault}
+              value={communicationNotes}
+              onChangeText={setCommunicationNotes}
+              multiline
+              numberOfLines={4}
+            />
+            
+            <View style={styles.updateActions}>
+              <TouchableOpacity
+                style={[styles.updateButton, { backgroundColor: '#f44336' }]}
+                onPress={() => {
+                  setCommunicationModalVisible(false);
+                  setCommunicationType('');
+                  setCommunicationNotes('');
+                }}
+              >
+                <Text style={styles.updateButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.updateButton, { 
+                  backgroundColor: '#FF9800', 
+                  opacity: (!communicationType || !communicationNotes.trim()) ? 0.7 : 1 
+                }]}
+                onPress={handleCommunicationLog}
+                disabled={!communicationType || !communicationNotes.trim()}
+              >
+                <Text style={styles.updateButtonText}>Log Communication</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -535,6 +1094,12 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
+  },
+  loadingOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 48,
   },
   header: {
     flexDirection: 'row',
@@ -788,5 +1353,116 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 14,
+  },
+  communicationActions: {
+    borderTopWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  communicationButton: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  communicationButtonText: {
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  paymentMethodContainer: {
+    marginBottom: 16,
+  },
+  paymentMethodOption: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    alignItems: 'center',
+  },
+  paymentMethodText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  viewModeContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  viewModeToggle: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  viewModeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    marginHorizontal: 4,
+  },
+  viewModeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  expandCollapseButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  expandButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderRadius: 16,
+  },
+  expandButtonText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  userGroupContainer: {
+    marginBottom: 12,
+  },
+  userGroupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  userGroupInfo: {
+    flex: 1,
+  },
+  userBasicInfo: {
+    marginBottom: 8,
+  },
+  customerContact: {
+    fontSize: 14,
+    marginTop: 2,
+  },
+  studentId: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  userStats: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  statBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  userLoansContainer: {
+    marginLeft: 8,
   },
 });
